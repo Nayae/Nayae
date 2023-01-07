@@ -39,12 +39,7 @@ internal static class Program
 
         Logger.Entry += ConsoleView.OnLoggerEntry;
 
-        var dsa = WindowOptions.Default;
-        dsa.VSync = false;
-        dsa.UpdatesPerSecond = 0;
-        dsa.FramesPerSecond = 0;
-
-        _window = Window.Create(dsa);
+        _window = Window.Create(WindowOptions.Default);
 
         _window.Load += OnWindowLoad;
         _window.Render += OnWindowRender;
@@ -56,6 +51,8 @@ internal static class Program
 
     private static void OnWindowLoad()
     {
+        _window.Center();
+        
         GraphicsFactory.Initialize(_gl = _window.CreateOpenGL());
         Input.Initialize(_input = _window.CreateInput());
 

@@ -60,6 +60,9 @@ public static class ConsoleView
 
     private static string _searchText = string.Empty;
 
+    private static Vector2 _topConsoleDummyVector = Vector2.Zero;
+    private static Vector2 _bottomConsoleDummyVector = Vector2.Zero;
+
     static ConsoleView()
     {
         _pendingEntries = new Queue<ConsoleViewEntry>();
@@ -183,7 +186,9 @@ public static class ConsoleView
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    ImGui.Dummy(new Vector2(0, _filteredEntries[currentIndex].Offset));
+
+                    _topConsoleDummyVector.Y = _filteredEntries[currentIndex].Offset;
+                    ImGui.Dummy(_topConsoleDummyVector);
 
                     for (; currentIndex < _filteredEntries.Count; currentIndex++)
                     {
@@ -216,9 +221,10 @@ public static class ConsoleView
                     {
                         ImGui.TableNextRow();
                         ImGui.TableNextColumn();
-                        ImGui.Dummy(
-                            new Vector2(0, _filteredEntries[^1].Offset - _filteredEntries[currentIndex].Offset)
-                        );
+
+                        _bottomConsoleDummyVector.Y = _filteredEntries[^1].Offset -
+                                                      _filteredEntries[currentIndex].Offset;
+                        ImGui.Dummy(_bottomConsoleDummyVector);
                     }
                 }
 
