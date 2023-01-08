@@ -18,7 +18,6 @@ public static class HierarchyView
 
     private static bool _isDragging;
     private static bool _checkDragAction;
-    private static bool _shouldRenderTree;
 
     private static GameObject _draggingObject;
 
@@ -26,34 +25,37 @@ public static class HierarchyView
     {
         _treeNodeBulletPosition = new Dictionary<GameObject, Vector2>();
 
-        var child1 = GameObject.Create("Child 1");
+        for (int i = 0; i < 10; i++)
         {
-            GameObject.Create("Child 1.1", child1);
-            GameObject.Create("Child 1.2", child1);
-            var child13 = GameObject.Create("Child 1.3", child1);
+            var child1 = GameObject.Create("Child 1");
             {
-                GameObject.Create("Child 1.3.1", child13);
-                GameObject.Create("Child 1.3.2", child13);
-                GameObject.Create("Child 1.3.3", child13);
+                GameObject.Create("Child 1.1", child1);
+                GameObject.Create("Child 1.2", child1);
+                var child13 = GameObject.Create("Child 1.3", child1);
+                {
+                    GameObject.Create("Child 1.3.1", child13);
+                    GameObject.Create("Child 1.3.2", child13);
+                    GameObject.Create("Child 1.3.3", child13);
+                }
             }
-        }
 
-        var child2 = GameObject.Create("Child 2");
-        {
-            GameObject.Create("Child 2.1", child2);
-            GameObject.Create("Child 2.2", child2);
-            GameObject.Create("Child 2.3", child2);
-        }
-
-        var child3 = GameObject.Create("Child 3");
-        {
-            GameObject.Create("Child 3.1", child3);
-            GameObject.Create("Child 3.2", child3);
-            var child33 = GameObject.Create("Child 3.3", child3);
+            var child2 = GameObject.Create("Child 2");
             {
-                GameObject.Create("Child 3.3.1", child33);
-                GameObject.Create("Child 3.3.2", child33);
-                GameObject.Create("Child 3.3.3", child33);
+                GameObject.Create("Child 2.1", child2);
+                GameObject.Create("Child 2.2", child2);
+                GameObject.Create("Child 2.3", child2);
+            }
+
+            var child3 = GameObject.Create("Child 3");
+            {
+                GameObject.Create("Child 3.1", child3);
+                GameObject.Create("Child 3.2", child3);
+                var child33 = GameObject.Create("Child 3.3", child3);
+                {
+                    GameObject.Create("Child 3.3.1", child33);
+                    GameObject.Create("Child 3.3.2", child33);
+                    GameObject.Create("Child 3.3.3", child33);
+                }
             }
         }
     }
@@ -70,12 +72,11 @@ public static class HierarchyView
 
             if (ImGui.BeginTable("Hierarchy", 1, ImGuiTableFlags.RowBg))
             {
-                _shouldRenderTree = true;
                 var drawList = ImGui.GetWindowDrawList();
                 var indentSpacing = ImGui.GetStyle().IndentSpacing;
 
                 var currentNode = GameObjectRegistry.GetEditorGameObjectList().First;
-                while (_shouldRenderTree && currentNode != null)
+                while (currentNode != null)
                 {
                     RenderTree(drawList, currentNode.Value, indentSpacing);
                     currentNode = currentNode.Next;
@@ -302,13 +303,22 @@ public static class HierarchyView
                     );
                     break;
                 }
+                default:
+                    drawList.AddRect(
+                        nodeMin,
+                        nodeMax,
+                        Color.White.ToImGui()
+                    );
+
+                    if (_checkDragAction)
+                    {
+                        GameObjectRegistry.MoveSourceToTargetAsFirstChild(_draggingObject, current);
+                    }
+
+                    break;
             }
 
-            if (_checkDragAction)
-            {
-                _shouldRenderTree = false;
-                _checkDragAction = false;
-            }
+            _checkDragAction = false;
         }
 
         if (isNodeOpen)
@@ -316,7 +326,7 @@ public static class HierarchyView
             var lastChildY = nodeMax.Y;
 
             var currentNode = current.Children.First;
-            while (_shouldRenderTree && currentNode != null)
+            while (currentNode != null)
             {
                 var rect = RenderTree(drawList, currentNode.Value, indentSpacing);
 
