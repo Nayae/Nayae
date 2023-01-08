@@ -17,20 +17,19 @@ public class GameObject
         Name = name;
     }
 
-    private GameObject(string name, GameObject parent)
-    {
-        Name = name;
-        Parent = parent;
-    }
-
     public static GameObject Create(string name)
     {
-        return GameObjectRegistry.Upsert(new GameObject(name));
+        return GameObjectRegistry.Add(new GameObject(name));
     }
 
     public static GameObject Create(string name, GameObject parent)
     {
-        return GameObjectRegistry.Upsert(new GameObject(name), parent);
+        return GameObjectRegistry.AddToParent(new GameObject(name), parent);
+    }
+
+    public override string ToString()
+    {
+        return Name;
     }
 }
 
@@ -45,7 +44,7 @@ public static class GameObjectRegistry
         _gameObjectResidingList = new Dictionary<GameObject, LinkedList<GameObject>>();
     }
 
-    public static GameObject Upsert(GameObject obj)
+    public static GameObject Add(GameObject obj)
     {
         if (_gameObjectResidingList.TryGetValue(obj, out var list))
         {
@@ -60,7 +59,7 @@ public static class GameObjectRegistry
         return obj;
     }
 
-    public static GameObject Upsert(GameObject obj, GameObject parent)
+    public static GameObject AddToParent(GameObject obj, GameObject parent)
     {
         if (_gameObjectResidingList.TryGetValue(obj, out var list))
         {
@@ -74,6 +73,50 @@ public static class GameObjectRegistry
         _gameObjectResidingList[obj] = parent.Children;
 
         return obj;
+    }
+
+    public static void PlaceSourceAboveTarget(GameObject source, GameObject target)
+    {
+        source.Level = target.Level;
+        source.Parent = target.Parent;
+        UpdateChildrenLevels(source.Children, target.Level + 1);
+
+        var sourceList = _gameObjectResidingList[source];
+        sourceList.Remove(source.Node);
+
+        var targetList = _gameObjectResidingList[target];
+        _gameObjectResidingList[source] = targetList;
+        targetList.AddBefore(target.Node, source.Node);
+    }
+
+    public static void PlaceSourceBelowTarget(GameObject source, GameObject target)
+    {
+        source.Level = target.Level;
+        source.Parent = target.Parent;
+        UpdateChildrenLevels(source.Children, target.Level + 1);
+
+        var sourceList = _gameObjectResidingList[source];
+        sourceList.Remove(source.Node);
+
+        var targetList = _gameObjectResidingList[target];
+        _gameObjectResidingList[source] = targetList;
+        targetList.AddAfter(target.Node, source.Node);
+    }
+
+    private static void UpdateChildrenLevels(LinkedList<GameObject> list, int level)
+    {
+        var node = list.First;
+        while (node != null)
+        {
+            node.Value.Level = level;
+
+            if (node.Value.Children.Count > 0)
+            {
+                UpdateChildrenLevels(node.Value.Children, level + 1);
+            }
+
+            node = node.Next;
+        }
     }
 
     public static LinkedList<GameObject> GetEditorGameObjectList()

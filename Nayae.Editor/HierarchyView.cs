@@ -1,6 +1,6 @@
-﻿using System.Diagnostics;
-using System.Drawing;
+﻿using System.Drawing;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using ImGuiNET;
 using Nayae.Engine;
 using Nayae.Engine.Extensions;
@@ -17,7 +17,7 @@ public static class HierarchyView
 
     private static bool _isDragging;
     private static bool _checkDragAction;
-    private static GameObject _activeDraggingObject;
+    private static GameObject _draggingObject;
 
     static HierarchyView()
     {
@@ -67,9 +67,11 @@ public static class HierarchyView
 
             if (ImGui.BeginTable("Hierarchy", 1, ImGuiTableFlags.RowBg))
             {
-                foreach (var node in GameObjectRegistry.GetEditorGameObjectList())
+                var currentNode = GameObjectRegistry.GetEditorGameObjectList().First;
+                while (currentNode != null)
                 {
-                    RenderTree(node, ImGui.GetWindowDrawList(), ImGui.GetStyle().IndentSpacing);
+                    RenderTree(currentNode.Value, ImGui.GetWindowDrawList(), ImGui.GetStyle().IndentSpacing);
+                    currentNode = currentNode.Next;
                 }
 
                 ImGui.EndTable();
@@ -84,12 +86,7 @@ public static class HierarchyView
         ImGui.PopStyleVar();
     }
 
-    private static Vector2 RenderTree(
-        GameObject currentObject,
-        ImDrawListPtr drawList,
-        float indentSpacing,
-        int level = 0
-    )
+    private static Vector2 RenderTree(GameObject current, ImDrawListPtr drawList, float indentSpacing)
     {
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
@@ -98,20 +95,20 @@ public static class HierarchyView
                     ImGuiTreeNodeFlags.OpenOnArrow |
                     ImGuiTreeNodeFlags.FramePadding;
 
-        if (currentObject.Children.Count == 0)
+        if (current.Children.Count == 0)
         {
             flags |= ImGuiTreeNodeFlags.Leaf;
         }
 
-        ImGui.SetNextItemOpen(currentObject.IsExpanded, ImGuiCond.FirstUseEver);
-        var isNodeOpen = ImGui.TreeNodeEx(currentObject.Name, flags);
+        ImGui.SetNextItemOpen(current.IsExpanded, ImGuiCond.FirstUseEver);
+        var isNodeOpen = ImGui.TreeNodeEx(current.Name, flags);
 
         var cursor = ImGui.GetCursorScreenPos();
         var nodeMax = ImGui.GetItemRectMax();
 
         if (ImGui.IsItemToggledOpen())
         {
-            currentObject.IsExpanded = isNodeOpen;
+            current.IsExpanded = isNodeOpen;
         }
 
         if (ImGui.IsItemHovered())
@@ -120,7 +117,7 @@ public static class HierarchyView
             switch (dragging)
             {
                 case true when !_isDragging:
-                    _activeDraggingObject = currentObject;
+                    _draggingObject = current;
                     _isDragging = true;
                     break;
                 case false when _isDragging:
@@ -135,298 +132,194 @@ public static class HierarchyView
             var nodeMin = ImGui.GetItemRectMin();
             var mousePos = ImGui.GetMousePos();
             var delta = (mousePos.Y - nodeMin.Y) / (nodeMax.Y - nodeMin.Y);
-
             var relativeMouseX = mousePos.X - nodeMin.X - LineStartOffset;
-            var levelSelection = 0;
 
             switch (delta)
             {
                 case <= 0.30f:
-                    // Only root objects should interact with previous tree nodes
-                    if (currentObject.Parent != null)
+                {
+                    int levelSelection;
+                    if (HierarchyViewHelper.TryGetPreviousVisualTreeObject(current, out var previous, out var type))
                     {
-                        levelSelection = level;
+                        levelSelection = type switch
+                        {
+                            HierarchyNodeType.Child => Math.Max(
+                                0,
+                                Math.Min(
+                                    (int)Math.Floor(relativeMouseX / IndentSize),
+                                    previous.Level
+                                )
+                            ),
+                            HierarchyNodeType.Parent => previous.Level + 1,
+                            HierarchyNodeType.Sibling => previous.Level,
+                            HierarchyNodeType.None => current.Level,
+                            _ => throw new ArgumentOutOfRangeException()
+                        };
 
                         if (_checkDragAction)
                         {
-                            Logger.Info("Place", _activeDraggingObject.Name, "above", currentObject.Name);
+                            switch (type)
+                            {
+                                case HierarchyNodeType.Child:
+                                    if (levelSelection == previous.Level)
+                                    {
+                                        GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, previous);
+                                    }
+
+                                    break;
+                                case HierarchyNodeType.Sibling:
+                                case HierarchyNodeType.Parent:
+                                    GameObjectRegistry.PlaceSourceAboveTarget(_draggingObject, current);
+                                    break;
+                                case HierarchyNodeType.None:
+                                default:
+                                    throw new ArgumentOutOfRangeException();
+                            }
                         }
                     }
                     else
                     {
-                        var lastNode = currentObject.Node.Previous;
+                        levelSelection = 0;
 
-                        // First node in the tree does not have a previous node, always indentation = 0
-                        if (lastNode != null)
+                        if (_checkDragAction)
                         {
-                            while (true)
-                            {
-                                // If no more tail nodes or the node was not expanded
-                                if (lastNode.Value.Children.Last == null || !lastNode.Value.IsExpanded)
-                                {
-                                    levelSelection = Math.Max(
-                                        0,
-                                        Math.Min(
-                                            (int)Math.Floor(relativeMouseX / IndentSize),
-                                            lastNode.Value.Level
-                                        )
-                                    );
+                            Logger.Info(_draggingObject, "at top");
+                        }
+                    }
 
-                                    break;
+                    if (type == HierarchyNodeType.Child)
+                    {
+                        if (levelSelection != previous.Level)
+                        {
+                            if (HierarchyViewHelper.TryGetParentMatchingLevel(previous, levelSelection, out var parent))
+                            {
+                                if (_checkDragAction)
+                                {
+                                    GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, parent);
                                 }
 
-                                // Take the tail node of the children
-                                lastNode = lastNode.Value.Children.Last;
+                                DrawParentBullet(drawList, parent);
                             }
                         }
-                    }
-
-                    // Only root tree root nodes and when they are not the absolute root tree node
-                    if (currentObject.Parent == null && currentObject.Node.Previous != null)
-                    {
-                        var nextNode = currentObject.Node.Previous;
-                        while (levelSelection > currentObject.Level)
+                        else
                         {
-                            // If no more tail nodes or the node has the correct level
-                            if (nextNode.Value.Children.Last == null || levelSelection == nextNode.Value.Level)
+                            if (_checkDragAction)
                             {
-                                break;
+                                GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, previous);
                             }
-
-                            // Take the tail node of the children
-                            nextNode = nextNode.Value.Children.Last;
-                        }
-
-                        if (_checkDragAction)
-                        {
-                            Logger.Info("Place", _activeDraggingObject.Name, "below", nextNode.Value.Name);
-                        }
-
-                        // Only if tree node has children and is expanded
-                        if (nextNode.Value.Children.Count > 0 && nextNode.Value.IsExpanded)
-                        {
-                            drawList.AddCircleFilled(
-                                _treeNodeBulletPosition[nextNode.Value],
-                                3.0f,
-                                Color.White.ToImGui()
-                            );
-
-                            drawList.AddCircleFilled(
-                                _treeNodeBulletPosition[nextNode.Value],
-                                1.5f,
-                                Color.Black.ToImGui()
-                            );
-                        }
-                    }
-                    else if (currentObject.Node.Previous == null)
-                    {
-                        if (_checkDragAction)
-                        {
-                            Logger.Info("Place", _activeDraggingObject.Name, "above", currentObject.Name);
                         }
                     }
 
-                    drawList.AddLine(
-                        new Vector2(nodeMin.X + LineStartOffset + levelSelection * IndentSize, nodeMin.Y),
-                        new Vector2(nodeMax.X, nodeMin.Y),
-                        Color.White.ToImGui()
+                    DrawObjectLine(
+                        drawList,
+                        lineStartX: nodeMin.X + LineStartOffset + levelSelection * IndentSize,
+                        lineEndX: nodeMax.X,
+                        lineY: nodeMin.Y
                     );
-
-                    drawList.AddCircleFilled(
-                        new Vector2(nodeMin.X + LineStartOffset + levelSelection * IndentSize, nodeMin.Y),
-                        3.0f,
-                        Color.White.ToImGui()
-                    );
-
-                    drawList.AddCircleFilled(
-                        new Vector2(nodeMin.X + LineStartOffset + levelSelection * IndentSize, nodeMin.Y),
-                        1.5f,
-                        Color.Black.ToImGui()
-                    );
-
                     break;
+                }
                 case >= 0.60f:
-                    var isLastFromSubTree = true;
-
-                    // Cannot be last tree node if the current tree node has next siblings
-                    if (currentObject.Node.Next != null)
+                {
+                    int levelSelection;
+                    if (
+                        HierarchyViewHelper.TryGetNextVisualTreeObject(current, out var next, out var type) &&
+                        type != HierarchyNodeType.Parent
+                    )
                     {
-                        isLastFromSubTree = false;
+                        levelSelection = type switch
+                        {
+                            HierarchyNodeType.Child => next.Level,
+                            HierarchyNodeType.Sibling => next.Level,
+                            HierarchyNodeType.None => current.Level,
+                            _ => throw new ArgumentOutOfRangeException()
+                        };
 
                         if (_checkDragAction)
                         {
-                            if (currentObject.Children.Count > 0)
+                            switch (type)
                             {
-                                if (currentObject.IsExpanded)
-                                {
-                                    Logger.Info("Place", _activeDraggingObject.Name, "first child", currentObject.Name);
-                                }
-                                else
-                                {
-                                    Logger.Info("Place", _activeDraggingObject.Name, "below", currentObject.Name);
-                                }
-                            }
-                            else
-                            {
-                                Logger.Info("Place", _activeDraggingObject.Name, "below", currentObject.Name);
-                            }
-                        }
-                    }
-                    // If root tree node
-                    else if (currentObject.Parent == null)
-                    {
-                        // Last node if current tree node does not have any children and is not expanded
-                        isLastFromSubTree = currentObject.Node.Next == null && !currentObject.IsExpanded;
-
-                        if (_checkDragAction)
-                        {
-                            if (currentObject.IsExpanded)
-                            {
-                                Logger.Info("Place", _activeDraggingObject.Name, "first child", currentObject.Name);
-                            }
-                            else
-                            {
-                                Logger.Info("Place", _activeDraggingObject.Name, "below", currentObject.Name);
+                                case HierarchyNodeType.Child:
+                                    Logger.Info(_draggingObject, "first child of", current);
+                                    break;
+                                case HierarchyNodeType.Sibling:
+                                    GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, current);
+                                    break;
+                                case HierarchyNodeType.None:
+                                case HierarchyNodeType.Parent:
+                                default:
+                                    throw new ArgumentOutOfRangeException();
                             }
                         }
                     }
                     else
-                    {
-                        var parentNode = currentObject.Node;
-                        while (parentNode != null)
-                        {
-                            // If parentNode is tree root
-                            if (parentNode.Value.Parent == null)
-                            {
-                                // Cannot be last tree node if the parent tree node has children and is expanded
-                                if (currentObject.Children.Count > 0 && currentObject.IsExpanded)
-                                {
-                                    isLastFromSubTree = false;
-                                    break;
-                                }
-
-                                // Is last node if the current tree node does not next siblings
-                                isLastFromSubTree = currentObject.Node.Next == null;
-                                break;
-                            }
-
-                            // Is not last node if the parent tree node has next siblings
-                            if (parentNode.Next != null)
-                            {
-                                isLastFromSubTree = false;
-                                break;
-                            }
-
-                            // Take the parent tree node of current
-                            parentNode = parentNode.Value.Parent.Node;
-                        }
-                    }
-
-                    if (isLastFromSubTree)
                     {
                         levelSelection = Math.Max(
                             0,
                             Math.Min(
                                 (int)Math.Floor(relativeMouseX / IndentSize),
-                                currentObject.Level
+                                current.Level
                             )
                         );
-                    }
-                    else
-                    {
-                        levelSelection = currentObject.Level + (
-                            currentObject.Children.Count > 0 && currentObject.IsExpanded ? 1 : 0
-                        );
-                    }
 
-                    drawList.AddLine(
-                        new Vector2(nodeMin.X + LineStartOffset + levelSelection * IndentSize, nodeMax.Y),
-                        new Vector2(nodeMax.X, nodeMax.Y),
-                        Color.White.ToImGui()
-                    );
-
-                    drawList.AddCircleFilled(
-                        new Vector2(nodeMin.X + LineStartOffset + levelSelection * IndentSize, nodeMax.Y),
-                        3.0f,
-                        Color.White.ToImGui()
-                    );
-
-                    drawList.AddCircleFilled(
-                        new Vector2(nodeMin.X + LineStartOffset + levelSelection * IndentSize, nodeMax.Y),
-                        1.5f,
-                        Color.Black.ToImGui()
-                    );
-
-                    // Draw only if last from topmost parent, is not already the correct level and has a parent
-                    if (isLastFromSubTree && levelSelection != currentObject.Level && currentObject.Parent != null)
-                    {
-                        var parent = currentObject.Parent;
-                        while (parent.Level > levelSelection)
+                        if (
+                            levelSelection != current.Level &&
+                            HierarchyViewHelper.TryGetParentMatchingLevel(current, levelSelection, out var parent)
+                        )
                         {
-                            if (parent.Parent == null || levelSelection == parent.Level)
+                            if (_checkDragAction)
                             {
-                                break;
+                                GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, parent);
                             }
 
-                            parent = parent.Parent;
+                            DrawParentBullet(drawList, parent);
                         }
-
-                        if (_checkDragAction)
+                        else
                         {
-                            Logger.Info("Place", _activeDraggingObject.Name, "below", parent.Name);
-                        }
-
-                        drawList.AddCircleFilled(
-                            _treeNodeBulletPosition[parent],
-                            3.0f,
-                            Color.White.ToImGui()
-                        );
-
-                        drawList.AddCircleFilled(
-                            _treeNodeBulletPosition[parent],
-                            1.5f,
-                            Color.Black.ToImGui()
-                        );
-                    }
-                    else
-                    {
-                        if (_checkDragAction)
-                        {
-                            Logger.Info("Place", _activeDraggingObject.Name, "below", currentObject.Name);
+                            if (_checkDragAction)
+                            {
+                                GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, current);
+                            }
                         }
                     }
 
+                    DrawObjectLine(
+                        drawList,
+                        lineStartX: nodeMin.X + LineStartOffset + levelSelection * IndentSize,
+                        lineEndX: nodeMax.X,
+                        lineY: nodeMax.Y
+                    );
                     break;
+                }
             }
 
             _checkDragAction = false;
         }
 
-        if (currentObject.Children.Count > 0)
-        {
-            _treeNodeBulletPosition[currentObject] = new Vector2(cursor.X + indentSpacing, nodeMax.Y);
-        }
+        _treeNodeBulletPosition[current] = new Vector2(cursor.X + indentSpacing, nodeMax.Y);
 
         if (isNodeOpen)
         {
             var lastChildY = nodeMax.Y;
 
-            foreach (var childObject in currentObject.Children)
+            var currentNode = current.Children.First;
+            while (currentNode != null)
             {
-                var rect = RenderTree(childObject, drawList, indentSpacing, level + 1);
+                var rect = RenderTree(currentNode.Value, drawList, indentSpacing);
 
                 lastChildY = rect.Y - indentSpacing - TreeNodeHeight;
 
                 // Draw horizontal line
-                var lineWidth = childObject.Children.Count > 0 ? 5.0f : 10.0f;
+                var lineWidth = currentNode.Value.Children.Count > 0 ? 5.0f : 10.0f;
                 drawList.AddLine(
                     new Vector2(cursor.X, lastChildY),
                     new Vector2(cursor.X + lineWidth, lastChildY),
                     Color.Gray.ToImGui()
                 );
+
+                currentNode = currentNode.Next;
             }
 
-            if (currentObject.Children.Count > 0)
+            if (current.Children.Count > 0)
             {
                 // Draw vertical line
                 drawList.AddLine(
@@ -440,5 +333,41 @@ public static class HierarchyView
         }
 
         return cursor;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    private static void DrawParentBullet(ImDrawListPtr drawList, GameObject parent)
+    {
+        drawList.AddCircleFilled(
+            _treeNodeBulletPosition[parent],
+            3.0f,
+            Color.White.ToImGui()
+        );
+
+        drawList.AddCircleFilled(
+            _treeNodeBulletPosition[parent],
+            1.5f,
+            Color.Black.ToImGui()
+        );
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    private static void DrawObjectLine(ImDrawListPtr drawList, float lineStartX, float lineEndX, float lineY)
+    {
+        drawList.AddLine(
+            new Vector2(lineStartX, lineY),
+            new Vector2(lineEndX, lineY),
+            Color.White.ToImGui()
+        );
+        drawList.AddCircleFilled(
+            new Vector2(lineStartX, lineY),
+            3.0f,
+            Color.White.ToImGui()
+        );
+        drawList.AddCircleFilled(
+            new Vector2(lineStartX, lineY),
+            1.5f,
+            Color.Black.ToImGui()
+        );
     }
 }
