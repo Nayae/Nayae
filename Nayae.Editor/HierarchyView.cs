@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System.Diagnostics;
+using System.Drawing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using ImGuiNET;
@@ -17,6 +18,8 @@ public static class HierarchyView
 
     private static bool _isDragging;
     private static bool _checkDragAction;
+    private static bool _shouldRenderTree;
+
     private static GameObject _draggingObject;
 
     static HierarchyView()
@@ -63,14 +66,18 @@ public static class HierarchyView
             ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(0.0f));
             ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(5.0f, TreeNodeHeight));
             ImGui.PushStyleVar(ImGuiStyleVar.IndentSpacing, IndentSize);
-            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(0));
+            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(0.0f));
 
             if (ImGui.BeginTable("Hierarchy", 1, ImGuiTableFlags.RowBg))
             {
+                _shouldRenderTree = true;
+                var drawList = ImGui.GetWindowDrawList();
+                var indentSpacing = ImGui.GetStyle().IndentSpacing;
+
                 var currentNode = GameObjectRegistry.GetEditorGameObjectList().First;
-                while (currentNode != null)
+                while (_shouldRenderTree && currentNode != null)
                 {
-                    RenderTree(currentNode.Value, ImGui.GetWindowDrawList(), ImGui.GetStyle().IndentSpacing);
+                    RenderTree(drawList, currentNode.Value, indentSpacing);
                     currentNode = currentNode.Next;
                 }
 
@@ -86,7 +93,7 @@ public static class HierarchyView
         ImGui.PopStyleVar();
     }
 
-    private static Vector2 RenderTree(GameObject current, ImDrawListPtr drawList, float indentSpacing)
+    private static Vector2 RenderTree(ImDrawListPtr drawList, GameObject current, float indentSpacing)
     {
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
@@ -127,6 +134,11 @@ public static class HierarchyView
             }
         }
 
+        if (_isDragging && current.Children.Count > 0)
+        {
+            _treeNodeBulletPosition[current] = new Vector2(cursor.X + indentSpacing, nodeMax.Y);
+        }
+
         if (_checkDragAction || (_isDragging && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem)))
         {
             var nodeMin = ImGui.GetItemRectMin();
@@ -163,13 +175,13 @@ public static class HierarchyView
                                 case HierarchyNodeType.Child:
                                     if (levelSelection == previous.Level)
                                     {
-                                        GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, previous);
+                                        GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, previous);
                                     }
 
                                     break;
                                 case HierarchyNodeType.Sibling:
                                 case HierarchyNodeType.Parent:
-                                    GameObjectRegistry.PlaceSourceAboveTarget(_draggingObject, current);
+                                    GameObjectRegistry.MoveSourceAboveTarget(_draggingObject, current);
                                     break;
                                 case HierarchyNodeType.None:
                                 default:
@@ -183,7 +195,7 @@ public static class HierarchyView
 
                         if (_checkDragAction)
                         {
-                            Logger.Info(_draggingObject, "at top");
+                            GameObjectRegistry.MoveSourceToTop(_draggingObject);
                         }
                     }
 
@@ -195,7 +207,7 @@ public static class HierarchyView
                             {
                                 if (_checkDragAction)
                                 {
-                                    GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, parent);
+                                    GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, parent);
                                 }
 
                                 DrawParentBullet(drawList, parent);
@@ -205,7 +217,7 @@ public static class HierarchyView
                         {
                             if (_checkDragAction)
                             {
-                                GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, previous);
+                                GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, previous);
                             }
                         }
                     }
@@ -239,10 +251,10 @@ public static class HierarchyView
                             switch (type)
                             {
                                 case HierarchyNodeType.Child:
-                                    Logger.Info(_draggingObject, "first child of", current);
+                                    GameObjectRegistry.MoveSourceToTargetAsFirstChild(_draggingObject, current);
                                     break;
                                 case HierarchyNodeType.Sibling:
-                                    GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, current);
+                                    GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, current);
                                     break;
                                 case HierarchyNodeType.None:
                                 case HierarchyNodeType.Parent:
@@ -268,7 +280,7 @@ public static class HierarchyView
                         {
                             if (_checkDragAction)
                             {
-                                GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, parent);
+                                GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, parent);
                             }
 
                             DrawParentBullet(drawList, parent);
@@ -277,7 +289,7 @@ public static class HierarchyView
                         {
                             if (_checkDragAction)
                             {
-                                GameObjectRegistry.PlaceSourceBelowTarget(_draggingObject, current);
+                                GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, current);
                             }
                         }
                     }
@@ -292,19 +304,21 @@ public static class HierarchyView
                 }
             }
 
-            _checkDragAction = false;
+            if (_checkDragAction)
+            {
+                _shouldRenderTree = false;
+                _checkDragAction = false;
+            }
         }
-
-        _treeNodeBulletPosition[current] = new Vector2(cursor.X + indentSpacing, nodeMax.Y);
 
         if (isNodeOpen)
         {
             var lastChildY = nodeMax.Y;
 
             var currentNode = current.Children.First;
-            while (currentNode != null)
+            while (_shouldRenderTree && currentNode != null)
             {
-                var rect = RenderTree(currentNode.Value, drawList, indentSpacing);
+                var rect = RenderTree(drawList, currentNode.Value, indentSpacing);
 
                 lastChildY = rect.Y - indentSpacing - TreeNodeHeight;
 

@@ -75,32 +75,82 @@ public static class GameObjectRegistry
         return obj;
     }
 
-    public static void PlaceSourceAboveTarget(GameObject source, GameObject target)
+    public static void MoveSourceAboveTarget(GameObject source, GameObject target)
     {
-        source.Level = target.Level;
-        source.Parent = target.Parent;
-        UpdateChildrenLevels(source.Children, target.Level + 1);
+        if (!IsSourceParentOfTarget(source, target))
+        {
+            if (source == target)
+            {
+                return;
+            }
 
-        var sourceList = _gameObjectResidingList[source];
-        sourceList.Remove(source.Node);
+            source.Level = target.Level;
+            source.Parent = target.Parent;
+            UpdateChildrenLevels(source.Children, target.Level + 1);
 
-        var targetList = _gameObjectResidingList[target];
-        _gameObjectResidingList[source] = targetList;
-        targetList.AddBefore(target.Node, source.Node);
+            var sourceList = _gameObjectResidingList[source];
+            sourceList.Remove(source.Node);
+
+            var targetList = _gameObjectResidingList[target];
+            _gameObjectResidingList[source] = targetList;
+            targetList.AddBefore(target.Node, source.Node);
+        }
     }
 
-    public static void PlaceSourceBelowTarget(GameObject source, GameObject target)
+    public static void MoveSourceBelowTarget(GameObject source, GameObject target)
     {
-        source.Level = target.Level;
-        source.Parent = target.Parent;
-        UpdateChildrenLevels(source.Children, target.Level + 1);
+        if (!IsSourceParentOfTarget(source, target))
+        {
+            if (source == target)
+            {
+                return;
+            }
+
+            source.Level = target.Level;
+            source.Parent = target.Parent;
+            UpdateChildrenLevels(source.Children, target.Level + 1);
+
+            var sourceList = _gameObjectResidingList[source];
+            sourceList.Remove(source.Node);
+
+            var targetList = _gameObjectResidingList[target];
+            _gameObjectResidingList[source] = targetList;
+            targetList.AddAfter(target.Node, source.Node);
+        }
+    }
+
+    public static void MoveSourceToTargetAsFirstChild(GameObject source, GameObject target)
+    {
+        if (source == target)
+        {
+            return;
+        }
+
+        if (!IsSourceParentOfTarget(source, target))
+        {
+            source.Level = target.Level + 1;
+            source.Parent = target;
+            UpdateChildrenLevels(source.Children, target.Level + 2);
+
+            var sourceList = _gameObjectResidingList[source];
+            sourceList.Remove(source.Node);
+
+            _gameObjectResidingList[source] = target.Children;
+            target.Children.AddFirst(source.Node);
+        }
+    }
+
+    public static void MoveSourceToTop(GameObject source)
+    {
+        source.Level = 0;
+        source.Parent = null;
+        UpdateChildrenLevels(source.Children, 1);
 
         var sourceList = _gameObjectResidingList[source];
         sourceList.Remove(source.Node);
 
-        var targetList = _gameObjectResidingList[target];
-        _gameObjectResidingList[source] = targetList;
-        targetList.AddAfter(target.Node, source.Node);
+        _gameObjectResidingList[source] = _root;
+        _root.AddFirst(source.Node);
     }
 
     private static void UpdateChildrenLevels(LinkedList<GameObject> list, int level)
@@ -117,6 +167,27 @@ public static class GameObjectRegistry
 
             node = node.Next;
         }
+    }
+
+    private static bool IsSourceParentOfTarget(GameObject source, GameObject target)
+    {
+        var node = target.Node;
+        while (node != null)
+        {
+            if (node.Value == source)
+            {
+                return true;
+            }
+
+            if (node.Value.Parent == null)
+            {
+                return false;
+            }
+
+            node = node.Value.Parent.Node;
+        }
+
+        return false;
     }
 
     public static LinkedList<GameObject> GetEditorGameObjectList()
