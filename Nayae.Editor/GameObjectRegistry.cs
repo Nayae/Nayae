@@ -8,6 +8,7 @@ public class GameObject
 
     public bool IsExpanded { get; set; } = true;
     public int Level { get; set; }
+    public float Offset { get; set; }
 
     public GameObject Parent { get; set; }
     public LinkedList<GameObject> Children { get; set; } = new();

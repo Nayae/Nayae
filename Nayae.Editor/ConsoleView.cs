@@ -233,7 +233,7 @@ public static class ConsoleView
                     ImGui.SetScrollHereY(1.0f);
                 }
 
-                if (_isAutoScroll && ImGui.GetIO().MouseWheel > 0)
+                if (_isAutoScroll && ImGui.GetIO().MouseWheel > 0 && ImGui.IsWindowHovered())
                 {
                     _isAutoScroll = false;
                 }

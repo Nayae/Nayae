@@ -25,7 +25,7 @@ public readonly struct LogEntry
     }
 }
 
-public static class Logger
+public static class Log
 {
     public static event Action<LogEntry> Entry;
 

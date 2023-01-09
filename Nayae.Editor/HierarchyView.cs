@@ -25,43 +25,28 @@ public static class HierarchyView
     {
         _treeNodeBulletPosition = new Dictionary<GameObject, Vector2>();
 
-        for (int i = 0; i < 10; i++)
+        for (var i = 0; i < 3; i++)
         {
-            var child1 = GameObject.Create("Child 1");
+            var child1 = GameObject.Create($"Child {i}");
             {
-                GameObject.Create("Child 1.1", child1);
-                GameObject.Create("Child 1.2", child1);
-                var child13 = GameObject.Create("Child 1.3", child1);
+                GameObject.Create($"Child {i}.1", child1);
+                GameObject.Create($"Child {i}.2", child1);
+                var child13 = GameObject.Create($"Child {i}.3", child1);
                 {
-                    GameObject.Create("Child 1.3.1", child13);
-                    GameObject.Create("Child 1.3.2", child13);
-                    GameObject.Create("Child 1.3.3", child13);
-                }
-            }
-
-            var child2 = GameObject.Create("Child 2");
-            {
-                GameObject.Create("Child 2.1", child2);
-                GameObject.Create("Child 2.2", child2);
-                GameObject.Create("Child 2.3", child2);
-            }
-
-            var child3 = GameObject.Create("Child 3");
-            {
-                GameObject.Create("Child 3.1", child3);
-                GameObject.Create("Child 3.2", child3);
-                var child33 = GameObject.Create("Child 3.3", child3);
-                {
-                    GameObject.Create("Child 3.3.1", child33);
-                    GameObject.Create("Child 3.3.2", child33);
-                    GameObject.Create("Child 3.3.3", child33);
+                    GameObject.Create($"Child {i}.3.1", child13);
+                    GameObject.Create($"Child {i}.3.2", child13);
+                    GameObject.Create($"Child {i}.3.3", child13);
                 }
             }
         }
+
+        RecalculateHierarchyOffsets(GameObjectRegistry.GetEditorGameObjectList());
     }
 
     public static void Render()
     {
+        var watch = Stopwatch.StartNew();
+
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0));
         if (ImGui.Begin("Hierarchy"))
         {
@@ -70,16 +55,37 @@ public static class HierarchyView
             ImGui.PushStyleVar(ImGuiStyleVar.IndentSpacing, IndentSize);
             ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(0.0f));
 
-            if (ImGui.BeginTable("Hierarchy", 1, ImGuiTableFlags.RowBg))
+            if (ImGui.BeginTable("Hierarchy", 1))
             {
                 var drawList = ImGui.GetWindowDrawList();
                 var indentSpacing = ImGui.GetStyle().IndentSpacing;
 
-                var currentNode = GameObjectRegistry.GetEditorGameObjectList().First;
-                while (currentNode != null)
+                var currentScrollY = ImGui.GetScrollY();
+                var currentWindowHeight = ImGui.GetWindowHeight();
+
+                var objects = GameObjectRegistry.GetEditorGameObjectList();
+                if (GetFirstVisibleEntry(objects, currentScrollY, out var currentNode))
                 {
-                    RenderTree(drawList, currentNode.Value, indentSpacing);
-                    currentNode = currentNode.Next;
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+                    ImGui.Dummy(new Vector2(0, currentNode.Value.Offset));
+
+                    while (currentNode != null)
+                    {
+                        if (currentNode.Value.Offset > currentWindowHeight + currentScrollY)
+                        {
+                            break;
+                        }
+
+                        RenderTree(drawList, currentNode.Value, indentSpacing);
+
+                        currentNode = currentNode.Next;
+                    }
+
+                    if (currentNode?.Next != null && objects.Last != null)
+                    {
+                        ImGui.Dummy(new Vector2(0, objects.Last.Value.Offset - currentNode.Value.Offset));
+                    }
                 }
 
                 ImGui.EndTable();
@@ -92,6 +98,72 @@ public static class HierarchyView
         }
 
         ImGui.PopStyleVar();
+        Log.Info(watch.Elapsed.TotalMilliseconds);
+    }
+
+    private static bool GetFirstVisibleEntry(
+        LinkedList<GameObject> objects,
+        float scrollY,
+        out LinkedListNode<GameObject> objectNode
+    )
+    {
+        objectNode = null;
+
+        var headNode = objects.First;
+        var tailNode = objects.Last;
+
+        if (headNode == null || tailNode == null)
+        {
+            return false;
+        }
+
+        if (headNode == tailNode)
+        {
+            objectNode = headNode;
+            return true;
+        }
+
+        while (headNode != tailNode)
+        {
+            if (headNode.Value.Offset >= scrollY)
+            {
+                objectNode = headNode.Previous ?? headNode;
+                return true;
+            }
+
+            if (tailNode.Value.Offset <= scrollY)
+            {
+                objectNode = tailNode;
+                return true;
+            }
+
+            headNode = headNode.Next;
+            tailNode = tailNode.Previous;
+        }
+
+        objectNode = headNode;
+        return true;
+    }
+
+    private static float RecalculateHierarchyOffsets(LinkedList<GameObject> objects)
+    {
+        var node = objects.First;
+        var offset = 0.0f;
+
+        while (node != null)
+        {
+            node.Value.Offset = offset;
+            offset += 21;
+
+            if (node.Value.IsExpanded && node.Value.Children.Count > 0)
+            {
+                offset += RecalculateHierarchyOffsets(node.Value.Children);
+            }
+
+            node = node.Next;
+        }
+
+        return offset;
     }
 
     private static Vector2 RenderTree(ImDrawListPtr drawList, GameObject current, float indentSpacing)
@@ -112,6 +184,7 @@ public static class HierarchyView
         var isNodeOpen = ImGui.TreeNodeEx(current.Name, flags);
 
         var cursor = ImGui.GetCursorScreenPos();
+        var nodeMin = ImGui.GetItemRectMin();
         var nodeMax = ImGui.GetItemRectMax();
 
         if (ImGui.IsItemToggledOpen())
@@ -142,7 +215,6 @@ public static class HierarchyView
 
         if (_checkDragAction || (_isDragging && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem)))
         {
-            var nodeMin = ImGui.GetItemRectMin();
             var mousePos = ImGui.GetMousePos();
             var delta = (mousePos.Y - nodeMin.Y) / (nodeMax.Y - nodeMin.Y);
             var relativeMouseX = mousePos.X - nodeMin.X - LineStartOffset;

@@ -37,7 +37,7 @@ internal static class Program
         GlfwWindowing.RegisterPlatform();
         GlfwInput.RegisterPlatform();
 
-        Logger.Entry += ConsoleView.OnLoggerEntry;
+        Log.Entry += ConsoleView.OnLoggerEntry;
 
         _window = Window.Create(WindowOptions.Default);
 
@@ -104,7 +104,7 @@ internal static class Program
             )
         );
 
-        Logger.Info("Hello, World!");
+        Log.Info("Hello, World!");
     }
 
     private static void OnWindowRender(double delta)
