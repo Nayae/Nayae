@@ -222,7 +222,8 @@ public static class ConsoleView
                         ImGui.TableNextRow();
                         ImGui.TableNextColumn();
 
-                        _bottomConsoleDummyVector.Y = _filteredEntries[^1].Offset -
+                        _bottomConsoleDummyVector.Y = _filteredEntries[^1].Offset +
+                                                      _filteredEntries[^1].Height -
                                                       _filteredEntries[currentIndex].Offset;
                         ImGui.Dummy(_bottomConsoleDummyVector);
                     }
