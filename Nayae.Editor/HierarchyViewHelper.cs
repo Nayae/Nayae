@@ -66,6 +66,7 @@ public static class HierarchyViewHelper
     {
         next = null;
 
+        // If node has children and is expanded, next object is always first child
         if (current.Children.First != null && current.IsExpanded)
         {
             next = current.Children.First.Value;
@@ -73,6 +74,7 @@ public static class HierarchyViewHelper
             return true;
         }
 
+        // If node has next node
         if (current.Node.Next != null)
         {
             next = current.Node.Next.Value;
@@ -80,6 +82,7 @@ public static class HierarchyViewHelper
             return true;
         }
 
+        // Node is absolute leaf of a sub-tree, find root of that sub-tree
         var node = current.Node;
         while (node != null)
         {
@@ -92,12 +95,14 @@ public static class HierarchyViewHelper
         }
 
 
+        // If root does not have a next value, it is the last element of the tree
         if (node?.Next == null)
         {
             type = HierarchyNodeType.None;
             return false;
         }
 
+        // Next node is the next root node of the current sub-tree
         next = node.Next.Value;
         type = HierarchyNodeType.Parent;
         return true;
