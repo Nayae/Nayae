@@ -1,7 +1,9 @@
 ﻿using System.Drawing;
 using System.Numerics;
 using ImGuiNET;
+using Nayae.Editor.Hierarchy;
 using Nayae.Engine;
+using Nayae.Engine.Core;
 using Nayae.Engine.Graphics;
 using Nayae.Engine.Graphics.Resources;
 using Silk.NET.Input;
@@ -32,6 +34,10 @@ internal static class Program
     private static Mesh _mesh;
     private static Vector2D<uint> _sceneWindowSize;
 
+    private static GameObjectRegistry _gameObjectRegistry;
+    private static HierarchyService _hierarchyService;
+    private static HierarchyView _hierarchyView;
+
     private static void Main()
     {
         GlfwWindowing.RegisterPlatform();
@@ -52,7 +58,7 @@ internal static class Program
     private static void OnWindowLoad()
     {
         _window.Center();
-        
+
         GraphicsFactory.Initialize(_gl = _window.CreateOpenGL());
         Input.Initialize(_input = _window.CreateInput());
 
@@ -104,13 +110,16 @@ internal static class Program
             )
         );
 
-        Log.Info("Hello, World!");
+        _gameObjectRegistry = new GameObjectRegistry();
+        _hierarchyService = new HierarchyService(_gameObjectRegistry);
+        _hierarchyView = new HierarchyView(_hierarchyService);
     }
 
     private static void OnWindowRender(double delta)
     {
         Input.Update();
         _controller.Update((float)delta);
+        _hierarchyService.Update();
 
         _gl.ClearColor(Color.CornflowerBlue);
         _gl.Clear(ClearBufferMask.ColorBufferBit);
@@ -160,7 +169,7 @@ internal static class Program
         ImGui.PopStyleVar();
 
         ConsoleView.Render();
-        HierarchyView.Render();
+        _hierarchyView.Render();
 
         _controller.Render();
     }

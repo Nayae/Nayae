@@ -4,30 +4,33 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using ImGuiNET;
 using Nayae.Engine;
+using Nayae.Engine.Core;
 using Nayae.Engine.Extensions;
 
-namespace Nayae.Editor;
+namespace Nayae.Editor.Hierarchy;
 
-public static class HierarchyView
+public class HierarchyView
 {
-    private const float TreeNodePaddingY = 4.0f;
-    private const float TreeNodeHeight = 21.0f;
+    public const float TreeNodePaddingY = 4.0f;
+    public const float TreeNodeHeight = 21.0f;
 
-    private const float IndentSize = 11.0f;
-    private const float LineStartOffset = 22.0f;
+    public const float IndentSize = 11.0f;
+    public const float LineStartOffset = 22.0f;
 
-    private static readonly Dictionary<GameObject, Vector2> _treeNodeBulletPosition;
+    private readonly HierarchyService _service;
+    private readonly Dictionary<GameObject, Vector2> _treeNodeBulletPosition;
 
-    private static bool _isDragging;
-    private static bool _checkDragAction;
+    private bool _isDragging;
+    private bool _checkDragAction;
 
-    private static GameObject _draggingObject;
+    private GameObject _draggingObject;
 
-    static HierarchyView()
+    public HierarchyView(HierarchyService service)
     {
         _treeNodeBulletPosition = new Dictionary<GameObject, Vector2>();
+        _service = service;
 
-        for (var i = 0; i < 10; i++)
+        for (var i = 0; i < 1000000; i++)
         {
             var child1 = GameObject.Create($"Child {i}");
             {
@@ -42,11 +45,12 @@ public static class HierarchyView
             }
         }
 
-        RecalculateHierarchyOffsets();
+        _service.RecalculateHierarchyOffsets();
     }
 
-    public static void Render()
+    public void Render()
     {
+        var watch = Stopwatch.StartNew();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0));
         if (ImGui.Begin("Hierarchy"))
         {
@@ -79,16 +83,16 @@ public static class HierarchyView
                 var currentScrollY = ImGui.GetScrollY();
                 var currentWindowHeight = ImGui.GetWindowHeight();
 
-                var objects = GameObjectRegistry.GetEditorGameObjectList();
-                if (GetFirstVisibleEntry(objects, currentScrollY, out var currentNode))
+                var objects = _service.GetHierarchyObjects();
+                if (_service.GetFirstVisibleEntry(objects, currentScrollY, out var currentNode))
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    ImGui.Dummy(new Vector2(0, currentNode.Value.Offset));
+                    ImGui.Dummy(new Vector2(0, _service.GetHierarchyNodeInfo(currentNode).Offset));
 
                     while (currentNode != null)
                     {
-                        if (currentNode.Value.Offset > currentWindowHeight + currentScrollY)
+                        if (_service.GetHierarchyNodeInfo(currentNode).Offset > currentWindowHeight + currentScrollY)
                         {
                             break;
                         }
@@ -103,7 +107,9 @@ public static class HierarchyView
                         ImGui.Dummy(
                             new Vector2(
                                 0,
-                                objects.Last.Value.Offset + objects.Last.Value.Height - currentNode.Value.Offset
+                                _service.GetHierarchyNodeInfo(objects.Last).Offset +
+                                _service.GetHierarchyNodeInfo(objects.Last).Height -
+                                _service.GetHierarchyNodeInfo(currentNode).Offset
                             )
                         );
                     }
@@ -119,9 +125,10 @@ public static class HierarchyView
         }
 
         ImGui.PopStyleVar();
+        Log.Info(watch.Elapsed.TotalMilliseconds);
     }
 
-    private static Vector2 RenderTree(ImDrawListPtr drawList, GameObject current, float indentSpacing)
+    private Vector2 RenderTree(ImDrawListPtr drawList, GameObject current, float indentSpacing)
     {
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
@@ -135,7 +142,7 @@ public static class HierarchyView
             flags |= ImGuiTreeNodeFlags.Leaf;
         }
 
-        ImGui.SetNextItemOpen(current.IsExpanded, ImGuiCond.FirstUseEver);
+        ImGui.SetNextItemOpen(_service.GetHierarchyNodeInfo(current).IsExpanded, ImGuiCond.FirstUseEver);
         var isNodeOpen = ImGui.TreeNodeEx(current.Name, flags);
 
         var cursor = ImGui.GetCursorScreenPos();
@@ -144,8 +151,8 @@ public static class HierarchyView
 
         if (ImGui.IsItemToggledOpen())
         {
-            current.IsExpanded = isNodeOpen;
-            RecalculateHierarchyOffsets();
+            _service.GetHierarchyNodeInfo(current).IsExpanded = isNodeOpen;
+            _service.RecalculateHierarchyOffsets();
         }
 
         if (ImGui.IsItemHovered())
@@ -180,7 +187,7 @@ public static class HierarchyView
                 case <= 0.30f:
                 {
                     int levelSelection;
-                    if (HierarchyViewHelper.TryGetPreviousVisualTreeObject(current, out var previous, out var type))
+                    if (_service.TryGetPreviousVisualTreeObject(current, out var previous, out var type))
                     {
                         levelSelection = type switch
                         {
@@ -188,12 +195,12 @@ public static class HierarchyView
                                 0,
                                 Math.Min(
                                     (int)Math.Floor(relativeMouseX / IndentSize),
-                                    previous.Level
+                                    _service.GetHierarchyNodeInfo(previous).Level
                                 )
                             ),
-                            HierarchyNodeType.Parent => previous.Level + 1,
-                            HierarchyNodeType.Sibling => previous.Level,
-                            HierarchyNodeType.None => current.Level,
+                            HierarchyNodeType.Parent => _service.GetHierarchyNodeInfo(previous).Level + 1,
+                            HierarchyNodeType.Sibling => _service.GetHierarchyNodeInfo(previous).Level,
+                            HierarchyNodeType.None => _service.GetHierarchyNodeInfo(current).Level,
                             _ => throw new ArgumentOutOfRangeException()
                         };
 
@@ -202,15 +209,15 @@ public static class HierarchyView
                             switch (type)
                             {
                                 case HierarchyNodeType.Child:
-                                    if (levelSelection == previous.Level)
+                                    if (levelSelection == _service.GetHierarchyNodeInfo(previous).Level)
                                     {
-                                        GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, previous);
+                                        _service.MoveSourceBelowTarget(_draggingObject, previous);
                                     }
 
                                     break;
                                 case HierarchyNodeType.Sibling:
                                 case HierarchyNodeType.Parent:
-                                    GameObjectRegistry.MoveSourceAboveTarget(_draggingObject, current);
+                                    _service.MoveSourceAboveTarget(_draggingObject, current);
                                     break;
                                 case HierarchyNodeType.None:
                                 default:
@@ -224,19 +231,19 @@ public static class HierarchyView
 
                         if (_checkDragAction)
                         {
-                            GameObjectRegistry.MoveSourceToTop(_draggingObject);
+                            _service.MoveSourceToTop(_draggingObject);
                         }
                     }
 
                     if (type == HierarchyNodeType.Child)
                     {
-                        if (levelSelection != previous.Level)
+                        if (levelSelection != _service.GetHierarchyNodeInfo(previous).Level)
                         {
-                            if (HierarchyViewHelper.TryGetParentMatchingLevel(previous, levelSelection, out var parent))
+                            if (_service.TryGetParentMatchingLevel(previous, levelSelection, out var parent))
                             {
                                 if (_checkDragAction)
                                 {
-                                    GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, parent);
+                                    _service.MoveSourceBelowTarget(_draggingObject, parent);
                                 }
 
                                 DrawParentBullet(drawList, parent);
@@ -246,7 +253,7 @@ public static class HierarchyView
                         {
                             if (_checkDragAction)
                             {
-                                GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, previous);
+                                _service.MoveSourceBelowTarget(_draggingObject, previous);
                             }
                         }
                     }
@@ -263,15 +270,15 @@ public static class HierarchyView
                 {
                     int levelSelection;
                     if (
-                        HierarchyViewHelper.TryGetNextVisualTreeObject(current, out var next, out var type) &&
+                        _service.TryGetNextVisualTreeObject(current, out var next, out var type) &&
                         type != HierarchyNodeType.Parent
                     )
                     {
                         levelSelection = type switch
                         {
-                            HierarchyNodeType.Child => next.Level,
-                            HierarchyNodeType.Sibling => next.Level,
-                            HierarchyNodeType.None => current.Level,
+                            HierarchyNodeType.Child => _service.GetHierarchyNodeInfo(next).Level,
+                            HierarchyNodeType.Sibling => _service.GetHierarchyNodeInfo(next).Level,
+                            HierarchyNodeType.None => _service.GetHierarchyNodeInfo(current).Level,
                             _ => throw new ArgumentOutOfRangeException()
                         };
 
@@ -280,10 +287,10 @@ public static class HierarchyView
                             switch (type)
                             {
                                 case HierarchyNodeType.Child:
-                                    GameObjectRegistry.MoveSourceToTargetAsFirstChild(_draggingObject, current);
+                                    _service.MoveSourceToTargetAsFirstChild(_draggingObject, current);
                                     break;
                                 case HierarchyNodeType.Sibling:
-                                    GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, current);
+                                    _service.MoveSourceBelowTarget(_draggingObject, current);
                                     break;
                                 case HierarchyNodeType.None:
                                 case HierarchyNodeType.Parent:
@@ -298,18 +305,18 @@ public static class HierarchyView
                             0,
                             Math.Min(
                                 (int)Math.Floor(relativeMouseX / IndentSize),
-                                current.Level
+                                _service.GetHierarchyNodeInfo(current).Level
                             )
                         );
 
                         if (
-                            levelSelection != current.Level &&
-                            HierarchyViewHelper.TryGetParentMatchingLevel(current, levelSelection, out var parent)
+                            levelSelection != _service.GetHierarchyNodeInfo(current).Level &&
+                            _service.TryGetParentMatchingLevel(current, levelSelection, out var parent)
                         )
                         {
                             if (_checkDragAction)
                             {
-                                GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, parent);
+                                _service.MoveSourceBelowTarget(_draggingObject, parent);
                             }
 
                             DrawParentBullet(drawList, parent);
@@ -318,7 +325,7 @@ public static class HierarchyView
                         {
                             if (_checkDragAction)
                             {
-                                GameObjectRegistry.MoveSourceBelowTarget(_draggingObject, current);
+                                _service.MoveSourceBelowTarget(_draggingObject, current);
                             }
                         }
                     }
@@ -340,7 +347,7 @@ public static class HierarchyView
 
                     if (_checkDragAction)
                     {
-                        GameObjectRegistry.MoveSourceToTargetAsFirstChild(_draggingObject, current);
+                        _service.MoveSourceToTargetAsFirstChild(_draggingObject, current);
                     }
 
                     break;
@@ -387,80 +394,8 @@ public static class HierarchyView
         return cursor;
     }
 
-    private static bool GetFirstVisibleEntry(
-        LinkedList<GameObject> objects,
-        float scrollY,
-        out LinkedListNode<GameObject> objectNode
-    )
-    {
-        objectNode = null;
-
-        var headNode = objects.First;
-        var tailNode = objects.Last;
-
-        if (headNode == null || tailNode == null)
-        {
-            return false;
-        }
-
-        if (headNode == tailNode)
-        {
-            objectNode = headNode;
-            return true;
-        }
-
-        while (headNode != tailNode)
-        {
-            if (headNode.Value.Offset >= scrollY)
-            {
-                objectNode = headNode.Previous ?? headNode;
-                return true;
-            }
-
-            if (tailNode.Value.Offset <= scrollY)
-            {
-                objectNode = tailNode;
-                return true;
-            }
-
-            headNode = headNode.Next;
-            tailNode = tailNode.Previous;
-        }
-
-        objectNode = headNode;
-        return true;
-    }
-
-    private static float RecalculateHierarchyOffsets(LinkedList<GameObject> objects = null)
-    {
-        objects ??= GameObjectRegistry.GetEditorGameObjectList();
-
-        var node = objects.First;
-        var offset = 0.0f;
-
-        while (node != null)
-        {
-            node.Value.Offset = offset;
-            node.Value.Height = TreeNodeHeight;
-
-            offset += TreeNodeHeight;
-
-            if (node.Value.IsExpanded && node.Value.Children.Count > 0)
-            {
-                var height = RecalculateHierarchyOffsets(node.Value.Children);
-
-                node.Value.Height += height;
-                offset += height;
-            }
-
-            node = node.Next;
-        }
-
-        return offset;
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private static void DrawParentBullet(ImDrawListPtr drawList, GameObject parent)
+    private void DrawParentBullet(ImDrawListPtr drawList, GameObject parent)
     {
         drawList.AddCircleFilled(
             _treeNodeBulletPosition[parent],
@@ -476,7 +411,7 @@ public static class HierarchyView
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private static void DrawObjectLine(ImDrawListPtr drawList, float lineStartX, float lineEndX, float lineY)
+    private void DrawObjectLine(ImDrawListPtr drawList, float lineStartX, float lineEndX, float lineY)
     {
         drawList.AddLine(
             new Vector2(lineStartX, lineY),
