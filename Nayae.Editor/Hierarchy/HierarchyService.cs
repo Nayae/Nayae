@@ -142,10 +142,10 @@ public class HierarchyService
         return false;
     }
 
-    public bool TryGetPreviousVisualTreeObject(GameObject current, out GameObject previous, out HierarchyNodeType type)
+    public bool TryGetPreviousVisualTreeObject(GameObject current, out GameObject previous, out HierarchyRelativeNodeType type)
     {
         previous = null;
-        type = HierarchyNodeType.None;
+        type = HierarchyRelativeNodeType.None;
 
         if (current.Self.Previous == null)
         {
@@ -157,7 +157,7 @@ public class HierarchyService
 
             // Top of sub-tree should return parent object
             previous = current.Parent;
-            type = HierarchyNodeType.Parent;
+            type = HierarchyRelativeNodeType.Parent;
             return true;
         }
 
@@ -165,7 +165,7 @@ public class HierarchyService
         if (current.Self.Previous.Value.Children.Count == 0)
         {
             previous = current.Self.Previous.Value;
-            type = HierarchyNodeType.Sibling;
+            type = HierarchyRelativeNodeType.Sibling;
             return true;
         }
 
@@ -182,11 +182,11 @@ public class HierarchyService
         }
 
         previous = node.Value;
-        type = HierarchyNodeType.Child;
+        type = HierarchyRelativeNodeType.Child;
         return true;
     }
 
-    public bool TryGetNextVisualTreeObject(GameObject current, out GameObject next, out HierarchyNodeType type)
+    public bool TryGetNextVisualTreeObject(GameObject current, out GameObject next, out HierarchyRelativeNodeType type)
     {
         next = null;
 
@@ -194,7 +194,7 @@ public class HierarchyService
         if (current.Children.First != null && GetHierarchyNodeInfo(current).IsExpanded)
         {
             next = current.Children.First.Value;
-            type = HierarchyNodeType.Child;
+            type = HierarchyRelativeNodeType.Child;
             return true;
         }
 
@@ -202,7 +202,7 @@ public class HierarchyService
         if (current.Self.Next != null)
         {
             next = current.Self.Next.Value;
-            type = HierarchyNodeType.Sibling;
+            type = HierarchyRelativeNodeType.Sibling;
             return true;
         }
 
@@ -222,13 +222,13 @@ public class HierarchyService
         // If root does not have a next value, it is the last element of the tree
         if (node?.Next == null)
         {
-            type = HierarchyNodeType.None;
+            type = HierarchyRelativeNodeType.None;
             return false;
         }
 
         // Next node is the next root node of the current sub-tree
         next = node.Next.Value;
-        type = HierarchyNodeType.Parent;
+        type = HierarchyRelativeNodeType.Parent;
         return true;
     }
 

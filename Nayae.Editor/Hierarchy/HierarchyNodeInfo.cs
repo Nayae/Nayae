@@ -1,13 +1,5 @@
 ﻿namespace Nayae.Editor.Hierarchy;
 
-public enum HierarchyNodeType
-{
-    Child,
-    Parent,
-    Sibling,
-    None
-}
-
 public class HierarchyNodeInfo
 {
     public bool IsExpanded { get; set; } = true;

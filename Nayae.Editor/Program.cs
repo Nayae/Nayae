@@ -113,6 +113,21 @@ internal static class Program
         _gameObjectRegistry = new GameObjectRegistry();
         _hierarchyService = new HierarchyService(_gameObjectRegistry);
         _hierarchyView = new HierarchyView(_hierarchyService);
+
+        for (var i = 0; i < 10; i++)
+        {
+            var child1 = GameObject.Create($"Child {i}");
+            {
+                GameObject.Create($"Child {i}.1", child1);
+                GameObject.Create($"Child {i}.2", child1);
+                var child13 = GameObject.Create($"Child {i}.3", child1);
+                {
+                    GameObject.Create($"Child {i}.3.1", child13);
+                    GameObject.Create($"Child {i}.3.2", child13);
+                    GameObject.Create($"Child {i}.3.3", child13);
+                }
+            }
+        }
     }
 
     private static void OnWindowRender(double delta)
