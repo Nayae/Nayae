@@ -19,16 +19,17 @@ public class HierarchyView
 
     private readonly HierarchyService _service;
     private readonly Dictionary<GameObject, Vector2> _treeNodeBulletPosition;
+    private readonly HashSet<GameObject> _checkSelectionNextFrame;
 
     private bool _isDragging;
     private bool _checkDragAction;
 
-    private GameObject _draggingObject;
-
     public HierarchyView(HierarchyService service)
     {
-        _treeNodeBulletPosition = new Dictionary<GameObject, Vector2>();
         _service = service;
+
+        _treeNodeBulletPosition = new Dictionary<GameObject, Vector2>();
+        _checkSelectionNextFrame = new HashSet<GameObject>();
     }
 
     public void Render()
@@ -40,8 +41,11 @@ public class HierarchyView
             ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(5.0f, TreeNodePaddingY));
             ImGui.PushStyleVar(ImGuiStyleVar.IndentSpacing, IndentSize);
             ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(0.0f));
+            ImGui.PushStyleColor(ImGuiCol.HeaderActive, new Vector4(0.0f));
+            ImGui.PushStyleColor(ImGuiCol.TableRowBg, new Vector4(0.0f));
+            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(0.0f));
 
-            if (ImGui.BeginTable("Hierarchy", 1))
+            if (ImGui.BeginTable("Hierarchy", 1, ImGuiTableFlags.RowBg))
             {
                 if (_isDragging)
                 {
@@ -51,12 +55,6 @@ public class HierarchyView
                     {
                         _isDragging = false;
                     }
-
-                    ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4.0f));
-                    ImGui.BeginTooltip();
-                    ImGui.Text(_draggingObject.Name);
-                    ImGui.EndTooltip();
-                    ImGui.PopStyleVar();
                 }
 
                 var drawList = ImGui.GetWindowDrawList();
@@ -91,8 +89,7 @@ public class HierarchyView
                             ImGui.Dummy(
                                 new Vector2(
                                     0,
-                                    _service.GetHierarchyNodeInfo(objects.Last).Offset +
-                                    _service.GetHierarchyNodeInfo(objects.Last).Height -
+                                    _service.GetHierarchyNodeInfo(objects.Last).Offset + TreeNodeHeight -
                                     _service.GetHierarchyNodeInfo(currentNode).Offset
                                 )
                             );
@@ -104,7 +101,7 @@ public class HierarchyView
             }
 
             ImGui.PopStyleVar(3);
-            ImGui.PopStyleColor();
+            ImGui.PopStyleColor(4);
 
             ImGui.End();
         }
@@ -117,6 +114,13 @@ public class HierarchyView
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
 
+        var currentNodeInfo = _service.GetHierarchyNodeInfo(current);
+
+        if (currentNodeInfo.IsSelected)
+        {
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, Color.FromArgb(25, Color.White).ToImGui());
+        }
+
         var flags = ImGuiTreeNodeFlags.SpanFullWidth |
                     ImGuiTreeNodeFlags.OpenOnArrow |
                     ImGuiTreeNodeFlags.FramePadding;
@@ -126,26 +130,26 @@ public class HierarchyView
             flags |= ImGuiTreeNodeFlags.Leaf;
         }
 
-        ImGui.SetNextItemOpen(_service.GetHierarchyNodeInfo(current).IsExpanded, ImGuiCond.FirstUseEver);
+        ImGui.SetNextItemOpen(currentNodeInfo.IsExpanded, ImGuiCond.FirstUseEver);
         var isNodeOpen = ImGui.TreeNodeEx(current.Name, flags);
-
+        var isNodeHovered = ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
+        
         var cursor = ImGui.GetCursorScreenPos();
         var nodeMin = ImGui.GetItemRectMin();
         var nodeMax = ImGui.GetItemRectMax();
 
         if (ImGui.IsItemToggledOpen())
         {
-            _service.GetHierarchyNodeInfo(current).IsExpanded = isNodeOpen;
-            _service.RecalculateHierarchyOffsets();
+            currentNodeInfo.IsExpanded = isNodeOpen;
+            _service.RecalculateHierarchyNodeInformation();
         }
 
-        if (ImGui.IsItemHovered())
+        if (isNodeHovered)
         {
             var dragging = ImGui.IsMouseDragging(ImGuiMouseButton.Left, 4.0f);
             switch (dragging)
             {
                 case true when !_isDragging:
-                    _draggingObject = current;
                     _isDragging = true;
                     break;
                 case false when _isDragging:
@@ -155,12 +159,47 @@ public class HierarchyView
             }
         }
 
+        if (_checkSelectionNextFrame.Contains(current))
+        {
+            if (isNodeHovered)
+            {
+                if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                {
+                    _service.SetHierarchyNodeSelection(current);
+                    _checkSelectionNextFrame.Remove(current);
+                }
+            }
+            else
+            {
+                _checkSelectionNextFrame.Remove(current);
+            }
+        }
+
+        if (ImGui.IsItemClicked())
+        {
+            if (!_service.IsNodeSelected(current))
+            {
+                if (ImGui.IsKeyDown(ImGuiKey.ModCtrl))
+                {
+                    _service.ToggleHierarchyNodeSelection(current);
+                }
+                else
+                {
+                    _service.SetHierarchyNodeSelection(current);
+                }
+            }
+            else
+            {
+                _checkSelectionNextFrame.Add(current);
+            }
+        }
+
         if (_isDragging && current.Children.Count > 0)
         {
             _treeNodeBulletPosition[current] = new Vector2(cursor.X + indentSpacing, nodeMax.Y);
         }
 
-        if (_checkDragAction || (_isDragging && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem)))
+        if (_checkDragAction || (_isDragging && isNodeHovered))
         {
             var mousePos = ImGui.GetMousePos();
             var delta = (mousePos.Y - nodeMin.Y) / (nodeMax.Y - nodeMin.Y);
@@ -195,13 +234,13 @@ public class HierarchyView
                                 case HierarchyRelativeNodeType.Child:
                                     if (levelSelection == _service.GetHierarchyNodeInfo(previous).Level)
                                     {
-                                        _service.MoveSourceBelowTarget(_draggingObject, previous);
+                                        _service.MoveBelowTarget(previous);
                                     }
 
                                     break;
                                 case HierarchyRelativeNodeType.Sibling:
                                 case HierarchyRelativeNodeType.Parent:
-                                    _service.MoveSourceAboveTarget(_draggingObject, current);
+                                    _service.MoveAboveTarget(current);
                                     break;
                                 case HierarchyRelativeNodeType.None:
                                 default:
@@ -215,7 +254,7 @@ public class HierarchyView
 
                         if (_checkDragAction)
                         {
-                            _service.MoveSourceToTop(_draggingObject);
+                            _service.MoveToTop();
                         }
                     }
 
@@ -227,7 +266,7 @@ public class HierarchyView
                             {
                                 if (_checkDragAction)
                                 {
-                                    _service.MoveSourceBelowTarget(_draggingObject, parent);
+                                    _service.MoveBelowTarget(parent);
                                 }
 
                                 DrawParentBullet(drawList, parent);
@@ -237,7 +276,7 @@ public class HierarchyView
                         {
                             if (_checkDragAction)
                             {
-                                _service.MoveSourceBelowTarget(_draggingObject, previous);
+                                _service.MoveBelowTarget(previous);
                             }
                         }
                     }
@@ -271,10 +310,10 @@ public class HierarchyView
                             switch (type)
                             {
                                 case HierarchyRelativeNodeType.Child:
-                                    _service.MoveSourceToTargetAsFirstChild(_draggingObject, current);
+                                    _service.MoveAsFirstChild(current);
                                     break;
                                 case HierarchyRelativeNodeType.Sibling:
-                                    _service.MoveSourceBelowTarget(_draggingObject, current);
+                                    _service.MoveBelowTarget(current);
                                     break;
                                 case HierarchyRelativeNodeType.None:
                                 case HierarchyRelativeNodeType.Parent:
@@ -294,13 +333,13 @@ public class HierarchyView
                         );
 
                         if (
-                            levelSelection != _service.GetHierarchyNodeInfo(current).Level &&
+                            levelSelection != currentNodeInfo.Level &&
                             _service.TryGetParentMatchingLevel(current, levelSelection, out var parent)
                         )
                         {
                             if (_checkDragAction)
                             {
-                                _service.MoveSourceBelowTarget(_draggingObject, parent);
+                                _service.MoveBelowTarget(parent);
                             }
 
                             DrawParentBullet(drawList, parent);
@@ -309,7 +348,7 @@ public class HierarchyView
                         {
                             if (_checkDragAction)
                             {
-                                _service.MoveSourceBelowTarget(_draggingObject, current);
+                                _service.MoveBelowTarget(current);
                             }
                         }
                     }
@@ -331,7 +370,7 @@ public class HierarchyView
 
                     if (_checkDragAction)
                     {
-                        _service.MoveSourceToTargetAsFirstChild(_draggingObject, current);
+                        _service.MoveAsFirstChild(current);
                     }
 
                     break;

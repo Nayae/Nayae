@@ -40,9 +40,6 @@ internal static class Program
 
     private static void Main()
     {
-        GlfwWindowing.RegisterPlatform();
-        GlfwInput.RegisterPlatform();
-
         Log.Entry += ConsoleView.OnLoggerEntry;
 
         _window = Window.Create(WindowOptions.Default);
@@ -114,7 +111,7 @@ internal static class Program
         _hierarchyService = new HierarchyService(_gameObjectRegistry);
         _hierarchyView = new HierarchyView(_hierarchyService);
 
-        for (var i = 0; i < 10; i++)
+        for (var i = 0; i < 3; i++)
         {
             var child1 = GameObject.Create($"Child {i}");
             {

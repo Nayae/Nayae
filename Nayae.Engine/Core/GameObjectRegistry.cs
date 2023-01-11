@@ -2,9 +2,6 @@
 
 public class GameObjectRegistry
 {
-    public event Action<GameObject> GameObjectAdded;
-    public event Action<GameObject> GameObjectRemoved;
-
     private static GameObjectRegistry _instance;
     private readonly LinkedList<GameObject> _root;
 
@@ -28,7 +25,7 @@ public class GameObjectRegistry
             _root.AddLast(obj.Self);
         }
 
-        GameObjectAdded?.Invoke(obj);
+        EngineEvents.NotifyGameObjectCreated(obj);
 
         return obj;
     }
@@ -48,7 +45,7 @@ public class GameObjectRegistry
             parent.Children.AddLast(obj.Self);
         }
 
-        GameObjectAdded?.Invoke(obj);
+        EngineEvents.NotifyGameObjectCreated(obj);
 
         return obj;
     }
@@ -56,7 +53,7 @@ public class GameObjectRegistry
     public void Remove(GameObject obj)
     {
         obj.Self.List!.Remove(obj.Self);
-        GameObjectRemoved?.Invoke(obj);
+        EngineEvents.NotifyGameObjectDeleted(obj);
     }
 
     public LinkedList<GameObject> GetGameObjects()
