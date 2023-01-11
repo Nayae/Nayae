@@ -30,7 +30,7 @@ public class HierarchyView
         _treeNodeBulletPosition = new Dictionary<GameObject, Vector2>();
         _service = service;
 
-        for (var i = 0; i < 1000000; i++)
+        for (var i = 0; i < 10; i++)
         {
             var child1 = GameObject.Create($"Child {i}");
             {
@@ -44,8 +44,6 @@ public class HierarchyView
                 }
             }
         }
-
-        _service.RecalculateHierarchyOffsets();
     }
 
     public void Render()
@@ -83,8 +81,7 @@ public class HierarchyView
                 var currentScrollY = ImGui.GetScrollY();
                 var currentWindowHeight = ImGui.GetWindowHeight();
 
-                var objects = _service.GetHierarchyObjects();
-                if (_service.GetFirstVisibleEntry(objects, currentScrollY, out var currentNode))
+                if (_service.GetFirstVisibleEntry(currentScrollY, out var currentNode))
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
@@ -102,16 +99,20 @@ public class HierarchyView
                         currentNode = currentNode.Next;
                     }
 
-                    if (currentNode != null && objects.Last != null)
+                    if (currentNode != null)
                     {
-                        ImGui.Dummy(
-                            new Vector2(
-                                0,
-                                _service.GetHierarchyNodeInfo(objects.Last).Offset +
-                                _service.GetHierarchyNodeInfo(objects.Last).Height -
-                                _service.GetHierarchyNodeInfo(currentNode).Offset
-                            )
-                        );
+                        var objects = _service.GetHierarchyObjects();
+                        if (objects.Last != null)
+                        {
+                            ImGui.Dummy(
+                                new Vector2(
+                                    0,
+                                    _service.GetHierarchyNodeInfo(objects.Last).Offset +
+                                    _service.GetHierarchyNodeInfo(objects.Last).Height -
+                                    _service.GetHierarchyNodeInfo(currentNode).Offset
+                                )
+                            );
+                        }
                     }
                 }
 

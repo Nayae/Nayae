@@ -1,4 +1,5 @@
 ﻿using Nayae.Engine.Core;
+using Silk.NET.Maths;
 
 namespace Nayae.Editor.Hierarchy;
 
@@ -7,12 +8,14 @@ public class HierarchyService
     private readonly GameObjectRegistry _registry;
 
     private readonly Dictionary<GameObject, HierarchyNodeInfo> _hierarchyNodeInfos;
+    private readonly List<LinkedListNode<GameObject>> _treeRootNodes;
 
     private bool _shouldRecalculateHierarchyOffsets;
 
     public HierarchyService(GameObjectRegistry registry)
     {
         _hierarchyNodeInfos = new Dictionary<GameObject, HierarchyNodeInfo>();
+        _treeRootNodes = new List<LinkedListNode<GameObject>>();
 
         _registry = registry;
         {
@@ -35,6 +38,8 @@ public class HierarchyService
         if (_shouldRecalculateHierarchyOffsets)
         {
             _shouldRecalculateHierarchyOffsets = false;
+
+            _treeRootNodes.Clear();
             RecalculateHierarchyOffsets();
         }
     }
@@ -250,7 +255,7 @@ public class HierarchyService
         return true;
     }
 
-    public float RecalculateHierarchyOffsets(LinkedList<GameObject> objects = null)
+    public float RecalculateHierarchyOffsets(LinkedList<GameObject> objects = null, bool isTreeRoot = true)
     {
         objects ??= GetHierarchyObjects();
 
@@ -268,10 +273,15 @@ public class HierarchyService
 
             if (GetHierarchyNodeInfo(node).IsExpanded && node.Value.Children.Count > 0)
             {
-                var height = RecalculateHierarchyOffsets(node.Value.Children);
+                var height = RecalculateHierarchyOffsets(node.Value.Children, false);
 
                 info.Height += height;
                 offset += height;
+            }
+
+            if (isTreeRoot)
+            {
+                _treeRootNodes.Add(node);
             }
 
             node = node.Next;
@@ -280,48 +290,27 @@ public class HierarchyService
         return offset;
     }
 
-    public bool GetFirstVisibleEntry(
-        LinkedList<GameObject> objects,
-        float scrollY,
-        out LinkedListNode<GameObject> objectNode
-    )
+    public bool GetFirstVisibleEntry(float scrollY, out LinkedListNode<GameObject> objectNode)
     {
-        objectNode = null;
+        int start = 0, end = _treeRootNodes.Count - 1, offset = -1;
 
-        var headNode = objects.First;
-        var tailNode = objects.Last;
-
-        if (headNode == null || tailNode == null)
+        while (start <= end)
         {
-            return false;
-        }
-
-        if (headNode == tailNode)
-        {
-            objectNode = headNode;
-            return true;
-        }
-
-        while (headNode != tailNode)
-        {
-            if (GetHierarchyNodeInfo(headNode).Offset >= scrollY)
+            var mid = (start + end) / 2;
+            if (_hierarchyNodeInfos[_treeRootNodes[mid].Value].Offset <= scrollY)
             {
-                objectNode = headNode.Previous ?? headNode;
-                return true;
+                start = mid + 1;
+            }
+            else
+            {
+                end = mid - 1;
             }
 
-            if (GetHierarchyNodeInfo(tailNode).Offset <= scrollY)
-            {
-                objectNode = tailNode;
-                return true;
-            }
-
-            headNode = headNode.Next;
-            tailNode = tailNode.Previous;
+            offset = mid;
         }
 
-        objectNode = headNode;
-        return true;
+        objectNode = offset >= 0 ? _treeRootNodes[Scalar.Max(0, offset - 1)] : null;
+        return offset >= 0;
     }
 
     public HierarchyNodeInfo GetHierarchyNodeInfo(GameObject obj)
