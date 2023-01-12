@@ -1,9 +1,7 @@
-﻿using System.Diagnostics;
-using System.Drawing;
+﻿using System.Drawing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using ImGuiNET;
-using Nayae.Engine;
 using Nayae.Engine.Core;
 using Nayae.Engine.Extensions;
 
@@ -11,8 +9,8 @@ namespace Nayae.Editor.Hierarchy;
 
 public class HierarchyView
 {
-    public const float TreeNodePaddingY = 4.0f;
-    public const float TreeNodeHeight = 21.0f;
+    public const float TreeNodePaddingY = 2.0f;
+    public const float TreeNodeHeight = 17.0f;
 
     public const float IndentSize = 11.0f;
     public const float LineStartOffset = 22.0f;
@@ -130,21 +128,21 @@ public class HierarchyView
             flags |= ImGuiTreeNodeFlags.Leaf;
         }
 
-        ImGui.SetNextItemOpen(currentNodeInfo.IsExpanded, ImGuiCond.FirstUseEver);
+        ImGui.SetNextItemOpen(currentNodeInfo.IsExpanded);
         var isNodeOpen = ImGui.TreeNodeEx(current.Name, flags);
-        var isNodeHovered = ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
-        
+
         var cursor = ImGui.GetCursorScreenPos();
         var nodeMin = ImGui.GetItemRectMin();
         var nodeMax = ImGui.GetItemRectMax();
 
-        if (ImGui.IsItemToggledOpen())
+        var isNodeToggledOpen = ImGui.IsItemToggledOpen();
+        if (isNodeToggledOpen)
         {
             currentNodeInfo.IsExpanded = isNodeOpen;
             _service.RecalculateHierarchyNodeInformation();
         }
 
-        if (isNodeHovered)
+        if (ImGui.IsItemHovered())
         {
             var dragging = ImGui.IsMouseDragging(ImGuiMouseButton.Left, 4.0f);
             switch (dragging)
@@ -161,7 +159,7 @@ public class HierarchyView
 
         if (_checkSelectionNextFrame.Contains(current))
         {
-            if (isNodeHovered)
+            if (ImGui.IsItemHovered())
             {
                 if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
                 {
@@ -175,13 +173,17 @@ public class HierarchyView
             }
         }
 
-        if (ImGui.IsItemClicked())
+        if (!isNodeToggledOpen && ImGui.IsItemClicked())
         {
             if (!_service.IsNodeSelected(current))
             {
                 if (ImGui.IsKeyDown(ImGuiKey.ModCtrl))
                 {
                     _service.ToggleHierarchyNodeSelection(current);
+                }
+                else if (ImGui.IsKeyDown(ImGuiKey.ModShift))
+                {
+                    _service.AddHierarchyNodeSelectionFromLastToTarget(current);
                 }
                 else
                 {
@@ -199,7 +201,7 @@ public class HierarchyView
             _treeNodeBulletPosition[current] = new Vector2(cursor.X + indentSpacing, nodeMax.Y);
         }
 
-        if (_checkDragAction || (_isDragging && isNodeHovered))
+        if (_checkDragAction || (_isDragging && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem)))
         {
             var mousePos = ImGui.GetMousePos();
             var delta = (mousePos.Y - nodeMin.Y) / (nodeMax.Y - nodeMin.Y);

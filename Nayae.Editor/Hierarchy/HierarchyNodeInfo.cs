@@ -6,5 +6,5 @@ public class HierarchyNodeInfo
     public bool IsExpanded { get; set; } = true;
     public bool IsSelected { get; set; }
     public int Level { get; set; }
-    public float Offset => Index * HierarchyView.TreeNodeHeight;
+    public float Offset { get; set; }
 }

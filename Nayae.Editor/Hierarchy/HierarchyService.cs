@@ -1,4 +1,5 @@
-﻿using Nayae.Engine;
+﻿using ImGuiNET;
+using Nayae.Engine;
 using Nayae.Engine.Core;
 using Silk.NET.Maths;
 
@@ -7,12 +8,11 @@ namespace Nayae.Editor.Hierarchy;
 public class HierarchyService
 {
     private readonly GameObjectRegistry _registry;
-
     private readonly Dictionary<GameObject, HierarchyNodeInfo> _hierarchyNodeInfos;
-
     private readonly List<LinkedListNode<GameObject>> _treeRootNodes;
-    private readonly SortedDictionary<int, GameObject> _activeSelectionNodes;
+    private readonly SortedDictionary<int, GameObject> _activeSelectionObjects;
 
+    private GameObject _lastSelectedObject;
     private int _nextHierarchyNodeIndex;
     private bool _shouldRecalculateHierarchyInformation;
 
@@ -22,7 +22,7 @@ public class HierarchyService
 
         _hierarchyNodeInfos = new Dictionary<GameObject, HierarchyNodeInfo>();
         _treeRootNodes = new List<LinkedListNode<GameObject>>();
-        _activeSelectionNodes = new SortedDictionary<int, GameObject>();
+        _activeSelectionObjects = new SortedDictionary<int, GameObject>();
 
         EngineEvents.GameObjectCreated += obj =>
         {
@@ -46,39 +46,9 @@ public class HierarchyService
         }
     }
 
-    public void SetHierarchyNodeSelection(GameObject obj)
-    {
-        foreach (var selectionObj in _activeSelectionNodes.Values)
-        {
-            _hierarchyNodeInfos[selectionObj].IsSelected = false;
-        }
-
-        _activeSelectionNodes.Clear();
-
-        var info = GetHierarchyNodeInfo(obj);
-        _activeSelectionNodes.Add(info.Index, obj);
-        info.IsSelected = true;
-    }
-
-    public void ToggleHierarchyNodeSelection(GameObject obj)
-    {
-        var info = GetHierarchyNodeInfo(obj);
-
-        if (info.IsSelected)
-        {
-            _activeSelectionNodes.Remove(info.Index);
-        }
-        else
-        {
-            _activeSelectionNodes.Add(info.Index, obj);
-        }
-
-        info.IsSelected = !info.IsSelected;
-    }
-
     public void MoveAboveTarget(GameObject target)
     {
-        foreach (var source in _activeSelectionNodes.Values.Reverse())
+        foreach (var source in _activeSelectionObjects.Values.Reverse())
         {
             if (!IsSourceParentOfTarget(source, target))
             {
@@ -97,12 +67,12 @@ public class HierarchyService
             }
         }
 
-        RecalculateHierarchyNodeInformation();
+        _shouldRecalculateHierarchyInformation = true;
     }
 
     public void MoveBelowTarget(GameObject target)
     {
-        foreach (var source in _activeSelectionNodes.Values.Reverse())
+        foreach (var source in _activeSelectionObjects.Values.Reverse())
         {
             if (!IsSourceParentOfTarget(source, target))
             {
@@ -120,12 +90,12 @@ public class HierarchyService
             }
         }
 
-        RecalculateHierarchyNodeInformation();
+        _shouldRecalculateHierarchyInformation = true;
     }
 
     public void MoveAsFirstChild(GameObject parent)
     {
-        foreach (var source in _activeSelectionNodes.Values.Reverse())
+        foreach (var source in _activeSelectionObjects.Values.Reverse())
         {
             if (source == parent)
             {
@@ -143,12 +113,14 @@ public class HierarchyService
             }
         }
 
-        RecalculateHierarchyNodeInformation();
+        GetHierarchyNodeInfo(parent).IsExpanded = true;
+
+        _shouldRecalculateHierarchyInformation = true;
     }
 
     public void MoveToTop()
     {
-        foreach (var source in _activeSelectionNodes.Values.Reverse())
+        foreach (var source in _activeSelectionObjects.Values.Reverse())
         {
             GetHierarchyNodeInfo(source).Level = 0;
             source.Parent = null;
@@ -159,7 +131,90 @@ public class HierarchyService
             _registry.GetGameObjects().AddFirst(source.Self);
         }
 
-        RecalculateHierarchyNodeInformation();
+        _shouldRecalculateHierarchyInformation = true;
+    }
+
+    public void SetHierarchyNodeSelection(GameObject obj)
+    {
+        foreach (var selectionObj in _activeSelectionObjects.Values)
+        {
+            _hierarchyNodeInfos[selectionObj].IsSelected = false;
+        }
+
+        _activeSelectionObjects.Clear();
+
+        var info = GetHierarchyNodeInfo(obj);
+        info.IsSelected = true;
+
+        _activeSelectionObjects.Add(info.Index, obj);
+        _lastSelectedObject = obj;
+    }
+
+    public void ToggleHierarchyNodeSelection(GameObject obj)
+    {
+        var info = GetHierarchyNodeInfo(obj);
+        info.IsSelected = !info.IsSelected;
+
+        if (info.IsSelected)
+        {
+            _activeSelectionObjects.Remove(info.Index);
+        }
+        else
+        {
+            _activeSelectionObjects.Add(info.Index, obj);
+        }
+
+        _lastSelectedObject = obj;
+    }
+
+    public void AddHierarchyNodeSelectionFromLastToTarget(GameObject target)
+    {
+        if (_lastSelectedObject == null)
+        {
+            return;
+        }
+
+        var startInfo = GetHierarchyNodeInfo(_lastSelectedObject);
+        var targetInfo = GetHierarchyNodeInfo(target);
+
+        if (startInfo.Index == targetInfo.Index)
+        {
+            return;
+        }
+
+        var current = _lastSelectedObject;
+        while (current != null)
+        {
+            var info = GetHierarchyNodeInfo(current);
+            info.IsSelected = true;
+
+            if (!_activeSelectionObjects.ContainsKey(info.Index))
+            {
+                _activeSelectionObjects.Add(info.Index, current);
+            }
+
+            if (current == target)
+            {
+                break;
+            }
+
+            if (targetInfo.Index > startInfo.Index)
+            {
+                if (!TryGetNextVisualTreeObject(current, out current, out _))
+                {
+                    break;
+                }
+            }
+            else
+            {
+                if (!TryGetPreviousVisualTreeObject(current, out current, out _))
+                {
+                    break;
+                }
+            }
+        }
+
+        _lastSelectedObject = target;
     }
 
     private void UpdateChildrenLevels(LinkedList<GameObject> list, int level)
@@ -315,20 +370,16 @@ public class HierarchyService
 
         RecalculateHierarchyNodeInformation(GetHierarchyObjects());
 
-        var originalSelection = new SortedDictionary<int, GameObject>(_activeSelectionNodes);
-        _activeSelectionNodes.Clear();
+        var originalSelection = new SortedDictionary<int, GameObject>(_activeSelectionObjects);
+        _activeSelectionObjects.Clear();
 
         foreach (var obj in originalSelection.Values)
         {
-            _activeSelectionNodes.Add(_hierarchyNodeInfos[obj].Index, obj);
+            _activeSelectionObjects.Add(GetHierarchyNodeInfo(obj).Index, obj);
         }
     }
 
-    private void RecalculateHierarchyNodeInformation(
-        LinkedList<GameObject> objects,
-        bool isTreeRoot = true,
-        int level = 0
-    )
+    private void RecalculateHierarchyNodeInformation(LinkedList<GameObject> objects, int level = 0)
     {
         var node = objects.First;
 
@@ -337,14 +388,15 @@ public class HierarchyService
             var info = GetHierarchyNodeInfo(node);
 
             info.Index = _nextHierarchyNodeIndex++;
+            info.Offset = info.Index * HierarchyView.TreeNodeHeight;
             info.Level = level;
 
             if (info.IsExpanded && node.Value.Children.Count > 0)
             {
-                RecalculateHierarchyNodeInformation(node.Value.Children, false, level + 1);
+                RecalculateHierarchyNodeInformation(node.Value.Children, level + 1);
             }
 
-            if (isTreeRoot)
+            if (level == 0)
             {
                 _treeRootNodes.Add(node);
             }
@@ -378,7 +430,7 @@ public class HierarchyService
 
     public bool IsNodeSelected(GameObject obj)
     {
-        return _activeSelectionNodes.ContainsKey(_hierarchyNodeInfos[obj].Index);
+        return _activeSelectionObjects.ContainsKey(GetHierarchyNodeInfo(obj).Index);
     }
 
     public HierarchyNodeInfo GetHierarchyNodeInfo(GameObject obj)
