@@ -10,7 +10,7 @@ public class Framebuffer : GraphicsResource<FramebufferDescriptor>
 {
     public override void Initialize()
     {
-        ID = OpenGL.CreateFramebuffer();
+        ID = OpenGL.GenFramebuffer();
         Bind();
         {
             OpenGL.FramebufferTexture2D(
