@@ -1,9 +1,15 @@
-﻿using ImGuiNET;
-using Nayae.Engine;
+﻿using Nayae.Engine;
 using Nayae.Engine.Core;
-using Silk.NET.Maths;
 
 namespace Nayae.Editor.Hierarchy;
+
+public enum HierarchyMoveType
+{
+    AboveTarget,
+    BelowTarget,
+    AsFirstChild,
+    ToTop
+}
 
 public class HierarchyService
 {
@@ -15,6 +21,10 @@ public class HierarchyService
     private GameObject _lastSelectedObject;
     private int _nextHierarchyNodeIndex;
     private bool _shouldRecalculateHierarchyInformation;
+
+    private bool _shouldMoveNode;
+    private HierarchyMoveType _nodeMoveType;
+    private GameObject _nodeMoveTarget;
 
     public HierarchyService(GameObjectRegistry registry)
     {
@@ -39,6 +49,30 @@ public class HierarchyService
 
     public void Update()
     {
+        if (_shouldMoveNode)
+        {
+            switch (_nodeMoveType)
+            {
+                case HierarchyMoveType.AboveTarget:
+                    MoveAboveTarget(_nodeMoveTarget);
+                    break;
+                case HierarchyMoveType.BelowTarget:
+                    MoveBelowTarget(_nodeMoveTarget);
+                    break;
+                case HierarchyMoveType.AsFirstChild:
+                    MoveAsFirstChild(_nodeMoveTarget);
+                    break;
+                case HierarchyMoveType.ToTop:
+                    MoveToTop();
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+
+            _shouldMoveNode = false;
+        }
+
+
         if (_shouldRecalculateHierarchyInformation)
         {
             _shouldRecalculateHierarchyInformation = false;
@@ -48,6 +82,14 @@ public class HierarchyService
 
     public void MoveAboveTarget(GameObject target)
     {
+        if (!_shouldMoveNode)
+        {
+            _nodeMoveTarget = target;
+            _nodeMoveType = HierarchyMoveType.AboveTarget;
+            _shouldMoveNode = true;
+            return;
+        }
+
         foreach (var source in _activeSelectionObjects.Values.Reverse())
         {
             if (!IsSourceParentOfTarget(source, target))
@@ -72,6 +114,14 @@ public class HierarchyService
 
     public void MoveBelowTarget(GameObject target)
     {
+        if (!_shouldMoveNode)
+        {
+            _nodeMoveTarget = target;
+            _nodeMoveType = HierarchyMoveType.BelowTarget;
+            _shouldMoveNode = true;
+            return;
+        }
+
         foreach (var source in _activeSelectionObjects.Values.Reverse())
         {
             if (!IsSourceParentOfTarget(source, target))
@@ -95,6 +145,14 @@ public class HierarchyService
 
     public void MoveAsFirstChild(GameObject parent)
     {
+        if (!_shouldMoveNode)
+        {
+            _nodeMoveTarget = parent;
+            _nodeMoveType = HierarchyMoveType.AsFirstChild;
+            _shouldMoveNode = true;
+            return;
+        }
+
         foreach (var source in _activeSelectionObjects.Values.Reverse())
         {
             if (source == parent)
@@ -120,6 +178,13 @@ public class HierarchyService
 
     public void MoveToTop()
     {
+        if (!_shouldMoveNode)
+        {
+            _nodeMoveType = HierarchyMoveType.ToTop;
+            _shouldMoveNode = true;
+            return;
+        }
+
         foreach (var source in _activeSelectionObjects.Values.Reverse())
         {
             GetHierarchyNodeInfo(source).Level = 0;
@@ -379,21 +444,27 @@ public class HierarchyService
         }
     }
 
-    private void RecalculateHierarchyNodeInformation(LinkedList<GameObject> objects, int level = 0)
+    private float RecalculateHierarchyNodeInformation(LinkedList<GameObject> objects, int level = 0)
     {
         var node = objects.First;
+        var listHeight = 0.0f;
 
         while (node != null)
         {
+            listHeight += HierarchyView.TreeNodeHeight;
+
             var info = GetHierarchyNodeInfo(node);
 
             info.Index = _nextHierarchyNodeIndex++;
             info.Offset = info.Index * HierarchyView.TreeNodeHeight;
+            info.Height = HierarchyView.TreeNodeHeight;
             info.Level = level;
 
             if (info.IsExpanded && node.Value.Children.Count > 0)
             {
-                RecalculateHierarchyNodeInformation(node.Value.Children, level + 1);
+                var childrenHeight = RecalculateHierarchyNodeInformation(node.Value.Children, level + 1);
+                listHeight += childrenHeight;
+                info.Height += childrenHeight;
             }
 
             if (level == 0)
@@ -403,6 +474,8 @@ public class HierarchyService
 
             node = node.Next;
         }
+
+        return listHeight;
     }
 
     public bool GetFirstVisibleEntry(float scrollY, out LinkedListNode<GameObject> objectNode)
@@ -424,7 +497,7 @@ public class HierarchyService
             offset = mid;
         }
 
-        objectNode = offset >= 0 ? _treeRootNodes[Scalar.Max(0, offset - 1)] : null;
+        objectNode = offset >= 0 ? _treeRootNodes[end] : null;
         return offset >= 0;
     }
 

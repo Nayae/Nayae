@@ -111,7 +111,7 @@ internal static class Program
         _hierarchyService = new HierarchyService(_gameObjectRegistry);
         _hierarchyView = new HierarchyView(_hierarchyService);
 
-        for (var i = 0; i < 30; i++)
+        for (var i = 0; i < 100; i++)
         {
             var child1 = GameObject.Create($"Child {i}");
             {

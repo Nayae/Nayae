@@ -7,4 +7,5 @@ public class HierarchyNodeInfo
     public bool IsSelected { get; set; }
     public int Level { get; set; }
     public float Offset { get; set; }
+    public float Height { get; set; }
 }

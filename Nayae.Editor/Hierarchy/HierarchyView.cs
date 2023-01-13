@@ -2,6 +2,7 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using ImGuiNET;
+using Nayae.Engine;
 using Nayae.Engine.Core;
 using Nayae.Engine.Extensions;
 
@@ -32,6 +33,7 @@ public class HierarchyView
 
     public void Render()
     {
+        Log.TimeStart();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0));
         if (ImGui.Begin("Hierarchy"))
         {
@@ -84,10 +86,12 @@ public class HierarchyView
                         var objects = _service.GetHierarchyObjects();
                         if (objects.Last != null)
                         {
+                            var lastInfo = _service.GetHierarchyNodeInfo(objects.Last);
+
                             ImGui.Dummy(
                                 new Vector2(
                                     0,
-                                    _service.GetHierarchyNodeInfo(objects.Last).Offset + TreeNodeHeight -
+                                    lastInfo.Offset + lastInfo.Height -
                                     _service.GetHierarchyNodeInfo(currentNode).Offset
                                 )
                             );
@@ -105,6 +109,7 @@ public class HierarchyView
         }
 
         ImGui.PopStyleVar();
+        Log.TimeEnd();
     }
 
     private Vector2 RenderTree(ImDrawListPtr drawList, GameObject current, float indentSpacing)
@@ -119,17 +124,17 @@ public class HierarchyView
             ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, Color.FromArgb(25, Color.White).ToImGui());
         }
 
-        var flags = ImGuiTreeNodeFlags.SpanFullWidth |
-                    ImGuiTreeNodeFlags.OpenOnArrow |
-                    ImGuiTreeNodeFlags.FramePadding;
-
-        if (current.Children.Count == 0)
-        {
-            flags |= ImGuiTreeNodeFlags.Leaf;
-        }
+        const ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.SpanFullWidth |
+                                         ImGuiTreeNodeFlags.OpenOnArrow |
+                                         ImGuiTreeNodeFlags.FramePadding;
 
         ImGui.SetNextItemOpen(currentNodeInfo.IsExpanded);
-        var isNodeOpen = ImGui.TreeNodeEx(current.Name, flags);
+        var isNodeOpen = ImGui.TreeNodeEx(
+            current.Name,
+            current.Children.Count > 0
+                ? flags
+                : flags | ImGuiTreeNodeFlags.Leaf
+        );
 
         var cursor = ImGui.GetCursorScreenPos();
         var nodeMin = ImGui.GetItemRectMin();
@@ -419,7 +424,6 @@ public class HierarchyView
         return cursor;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private void DrawParentBullet(ImDrawListPtr drawList, GameObject parent)
     {
         drawList.AddCircleFilled(
@@ -435,7 +439,6 @@ public class HierarchyView
         );
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private void DrawObjectLine(ImDrawListPtr drawList, float lineStartX, float lineEndX, float lineY)
     {
         drawList.AddLine(

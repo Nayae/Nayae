@@ -251,7 +251,6 @@ public static class ConsoleView
         _pendingEntries.Enqueue(new ConsoleViewEntry(entry));
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private static void RegenerateFilteredList()
     {
         _filteredEntries.Clear();
@@ -264,7 +263,6 @@ public static class ConsoleView
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private static void AddToFiltered(ConsoleViewEntry entry)
     {
         if (_isCollapsed)
@@ -290,19 +288,16 @@ public static class ConsoleView
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private static float GetLogEntryHeight(string text, float wrapWidth)
     {
         return ImGui.CalcTextSize(text, wrapWidth).Y + ImGui.GetStyle().ItemInnerSpacing.Y;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private static bool DoesMatchFilter(ConsoleViewEntry entry)
     {
         return entry.Log.text.ToLower().Contains(_searchText.ToLower()) && _enabledLevels[entry.Log.level];
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private static bool TryGetFirstVisibleEntryIndex(float scrollY, out int index)
     {
         int start = 0, end = _filteredEntries.Count - 1, offset = -1;
@@ -321,11 +316,10 @@ public static class ConsoleView
             offset = mid;
         }
 
-        index = offset >= 0 ? Math.Max(0, offset - 1) : -1;
-        return index >= 0;
+        index = end;
+        return offset >= 0;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private static Vector4 GetEntryColor(LogLevel level)
     {
         return level switch
