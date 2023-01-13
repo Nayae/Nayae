@@ -33,7 +33,6 @@ public class HierarchyView
 
     public void Render()
     {
-        Log.TimeStart();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0));
         if (ImGui.Begin("Hierarchy"))
         {
@@ -109,7 +108,6 @@ public class HierarchyView
         }
 
         ImGui.PopStyleVar();
-        Log.TimeEnd();
     }
 
     private Vector2 RenderTree(ImDrawListPtr drawList, GameObject current, float indentSpacing)

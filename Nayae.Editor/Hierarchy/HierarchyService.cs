@@ -196,6 +196,7 @@ public class HierarchyService
         foreach (var selectionObj in _activeSelectionObjects.Values)
         {
             _hierarchyNodeInfos[selectionObj].IsSelected = false;
+            EditorEvents.NotifyGameObjectDeselected(selectionObj);
         }
 
         _activeSelectionObjects.Clear();
@@ -205,21 +206,25 @@ public class HierarchyService
 
         _activeSelectionObjects.Add(info.Index, obj);
         _lastSelectedObject = obj;
+
+        EditorEvents.NotifyGameObjectDeselected(obj);
     }
 
     public void ToggleHierarchyNodeSelection(GameObject obj)
     {
         var info = GetHierarchyNodeInfo(obj);
-        info.IsSelected = !info.IsSelected;
-
         if (info.IsSelected)
         {
             _activeSelectionObjects.Remove(info.Index);
+            EditorEvents.NotifyGameObjectDeselected(obj);
         }
         else
         {
             _activeSelectionObjects.Add(info.Index, obj);
+            EditorEvents.NotifyGameObjectSelected(obj);
         }
+
+        info.IsSelected = !info.IsSelected;
 
         _lastSelectedObject = obj;
     }
@@ -248,6 +253,7 @@ public class HierarchyService
             if (!_activeSelectionObjects.ContainsKey(info.Index))
             {
                 _activeSelectionObjects.Add(info.Index, current);
+                EditorEvents.NotifyGameObjectSelected(current);
             }
 
             if (current == target)
@@ -351,7 +357,8 @@ public class HierarchyService
         return true;
     }
 
-    public bool TryGetNextVisualTreeObject(GameObject current, out GameObject next, out HierarchyNodeRelativeTargetType type)
+    public bool TryGetNextVisualTreeObject(GameObject current, out GameObject next,
+        out HierarchyNodeRelativeTargetType type)
     {
         next = null;
 
