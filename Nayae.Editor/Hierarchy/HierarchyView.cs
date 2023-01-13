@@ -221,16 +221,16 @@ public class HierarchyView
                     {
                         levelSelection = type switch
                         {
-                            HierarchyRelativeNodeType.Child => Math.Max(
+                            HierarchyNodeRelativeTargetType.Child => Math.Max(
                                 0,
                                 Math.Min(
                                     (int)Math.Floor(relativeMouseX / IndentSize),
                                     _service.GetHierarchyNodeInfo(previous).Level
                                 )
                             ),
-                            HierarchyRelativeNodeType.Parent => _service.GetHierarchyNodeInfo(previous).Level + 1,
-                            HierarchyRelativeNodeType.Sibling => _service.GetHierarchyNodeInfo(previous).Level,
-                            HierarchyRelativeNodeType.None => _service.GetHierarchyNodeInfo(current).Level,
+                            HierarchyNodeRelativeTargetType.Parent => _service.GetHierarchyNodeInfo(previous).Level + 1,
+                            HierarchyNodeRelativeTargetType.Sibling => _service.GetHierarchyNodeInfo(previous).Level,
+                            HierarchyNodeRelativeTargetType.None => _service.GetHierarchyNodeInfo(current).Level,
                             _ => throw new ArgumentOutOfRangeException()
                         };
 
@@ -238,18 +238,18 @@ public class HierarchyView
                         {
                             switch (type)
                             {
-                                case HierarchyRelativeNodeType.Child:
+                                case HierarchyNodeRelativeTargetType.Child:
                                     if (levelSelection == _service.GetHierarchyNodeInfo(previous).Level)
                                     {
                                         _service.MoveBelowTarget(previous);
                                     }
 
                                     break;
-                                case HierarchyRelativeNodeType.Sibling:
-                                case HierarchyRelativeNodeType.Parent:
+                                case HierarchyNodeRelativeTargetType.Sibling:
+                                case HierarchyNodeRelativeTargetType.Parent:
                                     _service.MoveAboveTarget(current);
                                     break;
-                                case HierarchyRelativeNodeType.None:
+                                case HierarchyNodeRelativeTargetType.None:
                                 default:
                                     throw new ArgumentOutOfRangeException();
                             }
@@ -265,7 +265,7 @@ public class HierarchyView
                         }
                     }
 
-                    if (type == HierarchyRelativeNodeType.Child)
+                    if (type == HierarchyNodeRelativeTargetType.Child)
                     {
                         if (levelSelection != _service.GetHierarchyNodeInfo(previous).Level)
                         {
@@ -301,14 +301,14 @@ public class HierarchyView
                     int levelSelection;
                     if (
                         _service.TryGetNextVisualTreeObject(current, out var next, out var type) &&
-                        type != HierarchyRelativeNodeType.Parent
+                        type != HierarchyNodeRelativeTargetType.Parent
                     )
                     {
                         levelSelection = type switch
                         {
-                            HierarchyRelativeNodeType.Child => _service.GetHierarchyNodeInfo(next).Level,
-                            HierarchyRelativeNodeType.Sibling => _service.GetHierarchyNodeInfo(next).Level,
-                            HierarchyRelativeNodeType.None => _service.GetHierarchyNodeInfo(current).Level,
+                            HierarchyNodeRelativeTargetType.Child => _service.GetHierarchyNodeInfo(next).Level,
+                            HierarchyNodeRelativeTargetType.Sibling => _service.GetHierarchyNodeInfo(next).Level,
+                            HierarchyNodeRelativeTargetType.None => _service.GetHierarchyNodeInfo(current).Level,
                             _ => throw new ArgumentOutOfRangeException()
                         };
 
@@ -316,14 +316,14 @@ public class HierarchyView
                         {
                             switch (type)
                             {
-                                case HierarchyRelativeNodeType.Child:
+                                case HierarchyNodeRelativeTargetType.Child:
                                     _service.MoveAsFirstChild(current);
                                     break;
-                                case HierarchyRelativeNodeType.Sibling:
+                                case HierarchyNodeRelativeTargetType.Sibling:
                                     _service.MoveBelowTarget(current);
                                     break;
-                                case HierarchyRelativeNodeType.None:
-                                case HierarchyRelativeNodeType.Parent:
+                                case HierarchyNodeRelativeTargetType.None:
+                                case HierarchyNodeRelativeTargetType.Parent:
                                 default:
                                     throw new ArgumentOutOfRangeException();
                             }

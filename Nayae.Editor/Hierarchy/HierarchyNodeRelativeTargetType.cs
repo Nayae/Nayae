@@ -1,6 +1,6 @@
 ﻿namespace Nayae.Editor.Hierarchy;
 
-public enum HierarchyRelativeNodeType
+public enum HierarchyNodeRelativeTargetType
 {
     Child,
     Parent,

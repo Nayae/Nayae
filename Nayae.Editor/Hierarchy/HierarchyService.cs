@@ -3,14 +3,6 @@ using Nayae.Engine.Core;
 
 namespace Nayae.Editor.Hierarchy;
 
-public enum HierarchyMoveType
-{
-    AboveTarget,
-    BelowTarget,
-    AsFirstChild,
-    ToTop
-}
-
 public class HierarchyService
 {
     private readonly GameObjectRegistry _registry;
@@ -23,7 +15,7 @@ public class HierarchyService
     private bool _shouldRecalculateHierarchyInformation;
 
     private bool _shouldMoveNode;
-    private HierarchyMoveType _nodeMoveType;
+    private HierarchyNodeMoveType _nodeMoveType;
     private GameObject _nodeMoveTarget;
 
     public HierarchyService(GameObjectRegistry registry)
@@ -53,16 +45,16 @@ public class HierarchyService
         {
             switch (_nodeMoveType)
             {
-                case HierarchyMoveType.AboveTarget:
+                case HierarchyNodeMoveType.AboveTarget:
                     MoveAboveTarget(_nodeMoveTarget);
                     break;
-                case HierarchyMoveType.BelowTarget:
+                case HierarchyNodeMoveType.BelowTarget:
                     MoveBelowTarget(_nodeMoveTarget);
                     break;
-                case HierarchyMoveType.AsFirstChild:
+                case HierarchyNodeMoveType.AsFirstChild:
                     MoveAsFirstChild(_nodeMoveTarget);
                     break;
-                case HierarchyMoveType.ToTop:
+                case HierarchyNodeMoveType.ToTop:
                     MoveToTop();
                     break;
                 default:
@@ -85,7 +77,7 @@ public class HierarchyService
         if (!_shouldMoveNode)
         {
             _nodeMoveTarget = target;
-            _nodeMoveType = HierarchyMoveType.AboveTarget;
+            _nodeMoveType = HierarchyNodeMoveType.AboveTarget;
             _shouldMoveNode = true;
             return;
         }
@@ -117,7 +109,7 @@ public class HierarchyService
         if (!_shouldMoveNode)
         {
             _nodeMoveTarget = target;
-            _nodeMoveType = HierarchyMoveType.BelowTarget;
+            _nodeMoveType = HierarchyNodeMoveType.BelowTarget;
             _shouldMoveNode = true;
             return;
         }
@@ -148,7 +140,7 @@ public class HierarchyService
         if (!_shouldMoveNode)
         {
             _nodeMoveTarget = parent;
-            _nodeMoveType = HierarchyMoveType.AsFirstChild;
+            _nodeMoveType = HierarchyNodeMoveType.AsFirstChild;
             _shouldMoveNode = true;
             return;
         }
@@ -180,7 +172,7 @@ public class HierarchyService
     {
         if (!_shouldMoveNode)
         {
-            _nodeMoveType = HierarchyMoveType.ToTop;
+            _nodeMoveType = HierarchyNodeMoveType.ToTop;
             _shouldMoveNode = true;
             return;
         }
@@ -315,10 +307,10 @@ public class HierarchyService
     }
 
     public bool TryGetPreviousVisualTreeObject(GameObject current, out GameObject previous,
-        out HierarchyRelativeNodeType type)
+        out HierarchyNodeRelativeTargetType type)
     {
         previous = null;
-        type = HierarchyRelativeNodeType.None;
+        type = HierarchyNodeRelativeTargetType.None;
 
         if (current.Self.Previous == null)
         {
@@ -330,7 +322,7 @@ public class HierarchyService
 
             // Top of sub-tree should return parent object
             previous = current.Parent;
-            type = HierarchyRelativeNodeType.Parent;
+            type = HierarchyNodeRelativeTargetType.Parent;
             return true;
         }
 
@@ -338,7 +330,7 @@ public class HierarchyService
         if (current.Self.Previous.Value.Children.Count == 0)
         {
             previous = current.Self.Previous.Value;
-            type = HierarchyRelativeNodeType.Sibling;
+            type = HierarchyNodeRelativeTargetType.Sibling;
             return true;
         }
 
@@ -355,11 +347,11 @@ public class HierarchyService
         }
 
         previous = node.Value;
-        type = HierarchyRelativeNodeType.Child;
+        type = HierarchyNodeRelativeTargetType.Child;
         return true;
     }
 
-    public bool TryGetNextVisualTreeObject(GameObject current, out GameObject next, out HierarchyRelativeNodeType type)
+    public bool TryGetNextVisualTreeObject(GameObject current, out GameObject next, out HierarchyNodeRelativeTargetType type)
     {
         next = null;
 
@@ -367,7 +359,7 @@ public class HierarchyService
         if (current.Children.First != null && GetHierarchyNodeInfo(current).IsExpanded)
         {
             next = current.Children.First.Value;
-            type = HierarchyRelativeNodeType.Child;
+            type = HierarchyNodeRelativeTargetType.Child;
             return true;
         }
 
@@ -375,7 +367,7 @@ public class HierarchyService
         if (current.Self.Next != null)
         {
             next = current.Self.Next.Value;
-            type = HierarchyRelativeNodeType.Sibling;
+            type = HierarchyNodeRelativeTargetType.Sibling;
             return true;
         }
 
@@ -395,13 +387,13 @@ public class HierarchyService
         // If root does not have a next value, it is the last element of the tree
         if (node?.Next == null)
         {
-            type = HierarchyRelativeNodeType.None;
+            type = HierarchyNodeRelativeTargetType.None;
             return false;
         }
 
         // Next node is the next root node of the current sub-tree
         next = node.Next.Value;
-        type = HierarchyRelativeNodeType.Parent;
+        type = HierarchyNodeRelativeTargetType.Parent;
         return true;
     }
 
