@@ -1,6 +1,8 @@
-﻿using System.Drawing;
+﻿using System.Diagnostics;
+using System.Drawing;
 using System.Numerics;
 using ImGuiNET;
+using Nayae.Editor.Console;
 using Nayae.Editor.Hierarchy;
 using Nayae.Engine;
 using Nayae.Engine.Core;
@@ -34,13 +36,24 @@ internal static class Program
     private static Mesh _mesh;
     private static Vector2D<uint> _sceneWindowSize;
 
+    private static ConsoleService _consoleService;
+    private static ConsoleView _consoleView;
+
     private static GameObjectRegistry _gameObjectRegistry;
     private static HierarchyService _hierarchyService;
     private static HierarchyView _hierarchyView;
 
     private static void Main()
     {
-        Log.Entry += ConsoleView.OnLoggerEntry;
+        _consoleService = new ConsoleService();
+        Log.Entry += _consoleService.OnLoggerEntry;
+
+        _consoleView = new ConsoleView(_consoleService);
+
+        _gameObjectRegistry = new GameObjectRegistry();
+
+        _hierarchyService = new HierarchyService(_gameObjectRegistry);
+        _hierarchyView = new HierarchyView(_hierarchyService);
 
         _window = Window.Create(WindowOptions.Default);
 
@@ -107,11 +120,7 @@ internal static class Program
             )
         );
 
-        _gameObjectRegistry = new GameObjectRegistry();
-        _hierarchyService = new HierarchyService(_gameObjectRegistry);
-        _hierarchyView = new HierarchyView(_hierarchyService);
-
-        for (var i = 0; i < 100; i++)
+        for (var i = 0; i < 100000; i++)
         {
             var child1 = GameObject.Create($"Child {i}");
             {
@@ -131,6 +140,8 @@ internal static class Program
     {
         Input.Update();
         _controller.Update((float)delta);
+
+        _consoleService.Update();
         _hierarchyService.Update();
 
         _gl.ClearColor(Color.CornflowerBlue);
@@ -180,7 +191,7 @@ internal static class Program
         ImGui.End();
         ImGui.PopStyleVar();
 
-        ConsoleView.Render();
+        _consoleView.Render();
         _hierarchyView.Render();
 
         _controller.Render();

@@ -1,8 +1,6 @@
 ﻿using System.Drawing;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using ImGuiNET;
-using Nayae.Engine;
 using Nayae.Engine.Core;
 using Nayae.Engine.Extensions;
 
@@ -22,6 +20,9 @@ public class HierarchyView
 
     private bool _isDragging;
     private bool _checkDragAction;
+
+    private static Vector2 _topHierarchyDummyVector = Vector2.Zero;
+    private static Vector2 _bottomHierarchyDummyVector = Vector2.Zero;
 
     public HierarchyView(HierarchyService service)
     {
@@ -66,7 +67,9 @@ public class HierarchyView
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    ImGui.Dummy(new Vector2(0, _service.GetHierarchyNodeInfo(currentNode).Offset));
+
+                    _topHierarchyDummyVector.Y = _service.GetHierarchyNodeInfo(currentNode).Offset;
+                    ImGui.Dummy(_topHierarchyDummyVector);
 
                     while (currentNode != null)
                     {
@@ -87,13 +90,10 @@ public class HierarchyView
                         {
                             var lastInfo = _service.GetHierarchyNodeInfo(objects.Last);
 
-                            ImGui.Dummy(
-                                new Vector2(
-                                    0,
-                                    lastInfo.Offset + lastInfo.Height -
-                                    _service.GetHierarchyNodeInfo(currentNode).Offset
-                                )
-                            );
+                            _bottomHierarchyDummyVector.Y = lastInfo.Offset +
+                                                           lastInfo.Height -
+                                                           _service.GetHierarchyNodeInfo(currentNode).Offset;
+                            ImGui.Dummy(_bottomHierarchyDummyVector);
                         }
                     }
                 }
