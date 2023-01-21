@@ -4,7 +4,7 @@ using ImGuiNET;
 using Nayae.Engine.Core;
 using Nayae.Engine.Extensions;
 
-namespace Nayae.Editor.Hierarchy;
+namespace Nayae.Editor.Windows.Hierarchy;
 
 public class HierarchyView
 {

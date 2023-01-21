@@ -1,7 +1,8 @@
-﻿using Nayae.Engine;
+﻿using ImGuiNET;
+using Nayae.Engine;
 using Nayae.Engine.Core;
 
-namespace Nayae.Editor.Hierarchy;
+namespace Nayae.Editor.Windows.Hierarchy;
 
 public class HierarchyService
 {
@@ -63,7 +64,6 @@ public class HierarchyService
 
             _shouldMoveNode = false;
         }
-
 
         if (_shouldRecalculateHierarchyInformation)
         {
@@ -207,7 +207,7 @@ public class HierarchyService
         _activeSelectionObjects.Add(info.Index, obj);
         _lastSelectedObject = obj;
 
-        EditorEvents.NotifyGameObjectDeselected(obj);
+        EditorEvents.NotifyGameObjectSelected(obj);
     }
 
     public void ToggleHierarchyNodeSelection(GameObject obj)

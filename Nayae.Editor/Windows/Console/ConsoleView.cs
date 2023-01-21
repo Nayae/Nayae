@@ -4,7 +4,7 @@ using ImGuiNET;
 using Nayae.Engine;
 using Nayae.Engine.Extensions;
 
-namespace Nayae.Editor.Console;
+namespace Nayae.Editor.Windows.Console;
 
 public class ConsoleView
 {

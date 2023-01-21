@@ -1,4 +1,4 @@
-﻿namespace Nayae.Editor.Hierarchy;
+﻿namespace Nayae.Editor.Windows.Hierarchy;
 
 public enum HierarchyNodeRelativeTargetType
 {

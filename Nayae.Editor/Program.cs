@@ -1,20 +1,18 @@
-﻿using System.Diagnostics;
-using System.Drawing;
+﻿using System.Drawing;
 using System.Numerics;
 using ImGuiNET;
-using Nayae.Editor.Console;
-using Nayae.Editor.Hierarchy;
+using Nayae.Editor.Windows.Console;
+using Nayae.Editor.Windows.Hierarchy;
+using Nayae.Editor.Windows.Inspector;
 using Nayae.Engine;
 using Nayae.Engine.Core;
 using Nayae.Engine.Graphics;
 using Nayae.Engine.Graphics.Resources;
 using Silk.NET.Input;
-using Silk.NET.Input.Glfw;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.OpenGL.Extensions.ImGui;
 using Silk.NET.Windowing;
-using Silk.NET.Windowing.Glfw;
 using Framebuffer = Nayae.Engine.Graphics.Resources.Framebuffer;
 using Shader = Nayae.Engine.Graphics.Resources.Shader;
 using Texture = Nayae.Engine.Graphics.Resources.Texture;
@@ -36,12 +34,20 @@ internal static class Program
     private static Mesh _mesh;
     private static Vector2D<uint> _sceneWindowSize;
 
+    private static Shader _clickShader;
+    private static Texture _clickTexture;
+    private static Framebuffer _clickFramebuffer;
+
     private static ConsoleService _consoleService;
     private static ConsoleView _consoleView;
 
     private static GameObjectRegistry _gameObjectRegistry;
+
     private static HierarchyService _hierarchyService;
     private static HierarchyView _hierarchyView;
+
+    private static InspectorService _inspectorService;
+    private static InspectorView _inspectorView;
 
     private static void Main()
     {
@@ -54,6 +60,9 @@ internal static class Program
 
         _hierarchyService = new HierarchyService(_gameObjectRegistry);
         _hierarchyView = new HierarchyView(_hierarchyService);
+
+        _inspectorService = new InspectorService();
+        _inspectorView = new InspectorView(_inspectorService);
 
         _window = Window.Create(WindowOptions.Default);
 
@@ -86,6 +95,13 @@ internal static class Program
             )
         );
 
+        _clickShader = GraphicsFactory.CreateShader(
+            new ShaderDescriptor(
+                new ShaderStage(ShaderType.VertexShader, File.ReadAllText("./Resources/Shaders/click.vert.glsl")),
+                new ShaderStage(ShaderType.FragmentShader, File.ReadAllText("./Resources/Shaders/click.frag.glsl"))
+            )
+        );
+
         _texture = GraphicsFactory.CreateTexture(
             new TextureDescriptor(
                 TextureTarget.Texture2D,
@@ -109,6 +125,29 @@ internal static class Program
             )
         );
 
+        _clickTexture = GraphicsFactory.CreateTexture(
+            new TextureDescriptor(
+                TextureTarget.Texture2D,
+                new TextureSpecification(
+                    Width: 800,
+                    Height: 600,
+                    InternalFormat.Rgb,
+                    PixelFormat.Rgb
+                ),
+                new[]
+                {
+                    new TextureParameter(TextureParameterName.TextureMinFilter, GLEnum.Linear),
+                    new TextureParameter(TextureParameterName.TextureMagFilter, GLEnum.Linear)
+                }
+            )
+        );
+
+        _clickFramebuffer = GraphicsFactory.CreateFramebuffer(
+            new FramebufferDescriptor(
+                _clickTexture
+            )
+        );
+
         _mesh = GraphicsFactory.CreateMesh(
             new MeshDescriptor(
                 new[]
@@ -120,7 +159,7 @@ internal static class Program
             )
         );
 
-        for (var i = 0; i < 100000; i++)
+        for (var i = 0; i < 3; i++)
         {
             var child1 = GameObject.Create($"Child {i}");
             {
@@ -143,6 +182,7 @@ internal static class Program
 
         _consoleService.Update();
         _hierarchyService.Update();
+        _inspectorService.Update();
 
         _gl.ClearColor(Color.CornflowerBlue);
         _gl.Clear(ClearBufferMask.ColorBufferBit);
@@ -162,26 +202,66 @@ internal static class Program
             if (_sceneWindowSize != sceneWindowSize)
             {
                 _texture.Resize(sceneWindowSize.X, sceneWindowSize.Y);
+                _clickTexture.Resize(sceneWindowSize.X, sceneWindowSize.Y);
                 _sceneWindowSize = sceneWindowSize;
             }
 
-            _framebuffer.Bind();
+            var id = 0u;
+            if (ImGui.IsWindowHovered())
             {
-                _gl.ClearColor(Color.CornflowerBlue);
-                _gl.Clear(ClearBufferMask.ColorBufferBit);
-                _gl.Viewport(0, 0, sceneWindowSize.X, sceneWindowSize.Y);
+                id = _clickTexture.ID;
+                var pos = ImGui.GetMousePos() - ImGui.GetWindowPos();
+                pos.Y = ImGui.GetWindowContentRegionMax().Y - pos.Y;
 
-                _shader.Bind();
+                _clickFramebuffer.Bind();
                 {
-                    _mesh.Render();
+                    _gl.ClearColor(Color.CornflowerBlue);
+                    _gl.Clear(ClearBufferMask.ColorBufferBit);
+                    _gl.Viewport(0, 0, sceneWindowSize.X, sceneWindowSize.Y);
+
+                    _clickShader.Bind();
+                    {
+                        _clickShader.SetColor(Color.Red);
+                        _clickShader.SetVector2(pos);
+                        _mesh.Render();
+                    }
+                    _clickShader.Unbind();
                 }
-                _shader.Unbind();
+
+                var bytes = new byte[3];
+                _gl.ReadPixels(
+                    (int)pos.X, (int)pos.Y,
+                    1, 1,
+                    _clickTexture.Descriptor.TextureSpecification.PixelFormat,
+                    _clickTexture.Descriptor.TextureSpecification.PixelType,
+                    bytes.AsSpan()
+                );
+
+                _clickFramebuffer.Unbind();
+
+                Log.Info(Color.FromArgb(255, bytes[0], bytes[1], bytes[2]));
             }
-            _framebuffer.Unbind();
+            // else
+            // {
+            //     id = _texture.ID;
+            //     _framebuffer.Bind();
+            //     {
+            //         _gl.ClearColor(Color.CornflowerBlue);
+            //         _gl.Clear(ClearBufferMask.ColorBufferBit);
+            //         _gl.Viewport(0, 0, sceneWindowSize.X, sceneWindowSize.Y);
+            //
+            //         _shader.Bind();
+            //         {
+            //             _mesh.Render();
+            //         }
+            //         _shader.Unbind();
+            //     }
+            //     _framebuffer.Unbind();
+            // }
 
             _gl.Viewport(0, 0, (uint)_window.Size.X, (uint)_window.Size.Y);
             ImGui.Image(
-                new nint(_texture.ID),
+                new nint(id),
                 new Vector2(_sceneWindowSize.X, _sceneWindowSize.Y),
                 new Vector2(0, 1),
                 new Vector2(1, 0)
@@ -193,6 +273,7 @@ internal static class Program
 
         _consoleView.Render();
         _hierarchyView.Render();
+        _inspectorView.Render();
 
         _controller.Render();
     }

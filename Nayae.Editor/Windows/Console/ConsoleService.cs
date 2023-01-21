@@ -1,7 +1,7 @@
 ﻿using ImGuiNET;
 using Nayae.Engine;
 
-namespace Nayae.Editor.Console;
+namespace Nayae.Editor.Windows.Console;
 
 public class ConsoleService
 {

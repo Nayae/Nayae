@@ -1,4 +1,6 @@
-﻿namespace Nayae.Engine.Core;
+﻿using Nayae.Engine.Components;
+
+namespace Nayae.Engine.Core;
 
 public class GameObject
 {
@@ -6,12 +8,29 @@ public class GameObject
 
     public GameObject Parent { get; set; }
     public LinkedListNode<GameObject> Self { get; set; }
-    public LinkedList<GameObject> Children { get; set; }
+    public LinkedList<GameObject> Children { get; }
+
+    private readonly Dictionary<Type, IComponent> _components;
 
     private GameObject(string name)
     {
         Name = name;
         Children = new LinkedList<GameObject>();
+
+        _components = new Dictionary<Type, IComponent>
+        {
+            { typeof(Transform), new Transform() }
+        };
+    }
+
+    public T GetComponent<T>() where T : class, IComponent
+    {
+        return (T)_components[typeof(T)];
+    }
+
+    public IEnumerable<Type> GetComponentTypes()
+    {
+        return _components.Keys;
     }
 
     public static GameObject Create(string name)
