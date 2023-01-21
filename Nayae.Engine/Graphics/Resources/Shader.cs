@@ -1,6 +1,4 @@
-﻿using System.Drawing;
-using System.Numerics;
-using Nayae.Engine.Extensions;
+﻿using System.Numerics;
 using Silk.NET.OpenGL;
 
 namespace Nayae.Engine.Graphics.Resources;
@@ -52,14 +50,9 @@ public class Shader : GraphicsResource<ShaderDescriptor>
         }
     }
 
-    public void SetColor(Color color)
+    public unsafe void SetMatrix4x4(string uniform, Matrix4x4 mat)
     {
-        OpenGL.Uniform4(OpenGL.GetUniformLocation(ID, "PickingColor"), color.ToVector());
-    }
-    
-    public void SetVector2(Vector2 vec)
-    {
-        OpenGL.Uniform2(OpenGL.GetUniformLocation(ID, "mouse"), vec);
+        OpenGL.UniformMatrix4(OpenGL.GetUniformLocation(ID, uniform), 1, false, (float*)&mat);
     }
 
     public void Bind()
